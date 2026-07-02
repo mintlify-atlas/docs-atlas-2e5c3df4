@@ -1,0 +1,240 @@
+---
+title: "Go Testing Skill: Patterns for Go and Bubbletea TUI Tests"
+sidebarTitle: "Go Testing"
+description: "The go-testing skill injects Go testing patterns and Bubbletea TUI testing conventions into sub-agent prompts when Go test files or TUI components are detected."
+---
+
+The `go-testing` skill auto-loads whenever a session involves Go test files or Bubbletea TUI code. It injects four core testing patterns — table-driven tests, direct model state testing, `teatest` integration tests, and golden file comparisons — into the sub-agent's prompt before any code is written. The skill also carries a decision tree to help the agent choose the right pattern for each scenario, preventing the most common Go testing mistakes like over-engineering simple unit tests or under-testing stateful TUI components.
+
+## Trigger
+
+This skill loads automatically when:
+- Writing Go unit tests (`*_test.go` files)
+- Testing Bubbletea TUI components or state machines
+- Using the `teatest` integration test harness
+- Creating table-driven tests or golden file comparisons
+
+<Tip>
+  To manually trigger this skill in a prompt, mention "Go tests", "Bubbletea TUI", "teatest", or "golden file testing". The agent will load the skill before writing any test code.
+</Tip>
+
+## Core Patterns
+
+### Pattern 1 — Table-Driven Tests
+
+The standard Go pattern for covering multiple input/output cases in a single test function. Use this for any pure function or method with distinct input-outcome pairs.
+
+```go
+func TestSomething(t *testing.T) {
+    tests := []struct {
+        name     string
+        input    string
+        expected string
+        wantErr  bool
+    }{
+        {
+            name:     "valid input",
+            input:    "hello",
+            expected: "HELLO",
+            wantErr:  false,
+        },
+        {
+            name:     "empty input",
+            input:    "",
+            expected: "",
+            wantErr:  true,
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            result, err := ProcessInput(tt.input)
+
+            if (err != nil) != tt.wantErr {
+                t.Errorf("error = %v, wantErr %v", err, tt.wantErr)
+                return
+            }
+            if result != tt.expected {
+                t.Errorf("got %q, want %q", result, tt.expected)
+            }
+        })
+    }
+}
+```
+
+### Pattern 2 — Bubbletea Model State Testing
+
+Test `Update()` transitions directly against the model struct. This is faster than a full `teatest` run and is the right choice when you only need to verify that a specific message produces the expected state change.
+
+```go
+func TestModelUpdate(t *testing.T) {
+    m := NewModel()
+
+    // Simulate a key press
+    newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+    m = newModel.(Model)
+
+    if m.Screen != ScreenMainMenu {
+        t.Errorf("expected ScreenMainMenu, got %v", m.Screen)
+    }
+}
+```
+
+This pattern composes naturally with table-driven tests for exhaustive screen-transition coverage:
+
+```go
+func TestScreenTransitions(t *testing.T) {
+    tests := []struct {
+        name         string
+        startScreen  Screen
+        action       tea.Msg
+        expectScreen Screen
+    }{
+        {
+            name:         "welcome to main menu on Enter",
+            startScreen:  ScreenWelcome,
+            action:       tea.KeyMsg{Type: tea.KeyEnter},
+            expectScreen: ScreenMainMenu,
+        },
+        {
+            name:         "escape from OS select returns to main menu",
+            startScreen:  ScreenOSSelect,
+            action:       tea.KeyMsg{Type: tea.KeyEsc},
+            expectScreen: ScreenMainMenu,
+        },
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            m := NewModel()
+            m.Screen = tt.startScreen
+
+            newModel, _ := m.Update(tt.action)
+            m = newModel.(Model)
+
+            if m.Screen != tt.expectScreen {
+                t.Errorf("screen = %v, want %v", m.Screen, tt.expectScreen)
+            }
+        })
+    }
+}
+```
+
+### Pattern 3 — Teatest Integration Tests
+
+Use [Charmbracelet's `teatest`](https://github.com/charmbracelet/bubbletea/tree/master/teatest) to drive a full Bubbletea program through a real event loop. Reserve this for complete user flows where you need to verify the final model state after a sequence of inputs.
+
+```go
+func TestInteractiveFlow(t *testing.T) {
+    m := NewModel()
+    tm := teatest.NewTestModel(t, m)
+
+    // Drive the program with a sequence of key events
+    tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+    tm.Send(tea.KeyMsg{Type: tea.KeyDown})
+    tm.Send(tea.KeyMsg{Type: tea.KeyEnter})
+
+    // Wait for the program to finish
+    tm.WaitFinished(t, teatest.WithDuration(time.Second))
+
+    // Assert the final model state
+    finalModel := tm.FinalModel(t).(Model)
+    if finalModel.Screen != ExpectedScreen {
+        t.Errorf("wrong screen: got %v, want %v", finalModel.Screen, ExpectedScreen)
+    }
+}
+```
+
+### Pattern 4 — Golden File Testing
+
+Compare `View()` output against saved golden files. Ideal for catching regressions in rendered TUI output without manually asserting every character.
+
+```go
+// Pass -update flag to regenerate golden files when intentional changes are made
+var update = flag.Bool("update", false, "update golden files")
+
+func TestOSSelectGolden(t *testing.T) {
+    m := NewModel()
+    m.Screen = ScreenOSSelect
+    m.Width = 80
+    m.Height = 24
+
+    output := m.View()
+    golden := filepath.Join("testdata", "TestOSSelectGolden.golden")
+
+    if *update {
+        os.WriteFile(golden, []byte(output), 0644)
+    }
+
+    expected, _ := os.ReadFile(golden)
+    if output != string(expected) {
+        t.Errorf("output doesn't match golden file %s", golden)
+    }
+}
+```
+
+## Decision Tree
+
+Use this tree to pick the right pattern before writing any test code:
+
+```
+Testing a function?
+├── Pure function?           → Table-driven test (Pattern 1)
+├── Has side effects?        → Mock dependencies, then table-driven
+├── Returns error?           → Always test both success and error cases
+└── Complex logic?           → Break into smaller testable units first
+
+Testing a TUI component?
+├── State change on one msg? → Model.Update() directly (Pattern 2)
+├── Full user flow?          → teatest.NewTestModel() (Pattern 3)
+├── Visual output/rendering? → Golden file test (Pattern 4)
+└── Key navigation/cursor?   → Table-driven + Model.Update() (Pattern 2 + 1)
+
+Testing system/exec?
+├── Mock os/exec?            → Interface + mock
+├── Real commands needed?    → Integration test, skip with -short flag
+└── File operations?         → Use t.TempDir() for isolation
+```
+
+## Test File Organization
+
+```
+internal/tui/
+├── model.go
+├── model_test.go           # Model initialization and struct tests
+├── update.go
+├── update_test.go          # Update handler / state transition tests
+├── view.go
+├── view_test.go            # View rendering tests
+├── teatest_test.go         # Teatest integration tests (full flows)
+├── comprehensive_test.go   # End-to-end scenario tests
+└── testdata/
+    ├── TestOSSelectGolden.golden
+    └── TestViewGolden.golden
+```
+
+<Note>
+  Keep unit tests (`model_test.go`, `update_test.go`) and integration tests (`teatest_test.go`) in separate files. Integration tests often require a running event loop and can be skipped in short mode with `go test -short`.
+</Note>
+
+## Common Commands
+
+```bash
+# Run all tests
+go test ./...
+
+# Run only TUI tests with verbose output
+go test -v ./internal/tui/...
+
+# Run a specific test by name
+go test -run TestCursorNavigation ./...
+
+# Run with coverage report
+go test -cover ./...
+
+# Regenerate golden files after intentional output changes
+go test -update ./...
+
+# Skip integration tests (teatest, exec-based)
+go test -short ./...
+```

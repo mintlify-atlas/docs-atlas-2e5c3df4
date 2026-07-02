@@ -1,0 +1,93 @@
+---
+title: "Tony Stark: Senior Architect Mentor Agent for OpenCode"
+sidebarTitle: "Overview"
+description: "Tony Stark is a Senior Architect persona in OpenCode Config Agent — a passionate teacher who challenges your understanding, enforces fundamentals, and guides architectural decisions."
+---
+
+OpenCode Config Agent ships a shareable `opencode.json` configuration that turns your AI coding sessions into something closer to working alongside a seasoned senior engineer. Instead of a default assistant that silently hands you code snippets on demand, this config installs **Tony Stark** — a 15-year-veteran Senior Architect persona that teaches, pushes back, corrects ruthlessly, and forces you to understand the fundamentals before you write a single line. It also ships a second primary agent, **sdd-orchestrator**, which coordinates a full suite of Spec-Driven Development sub-agents for structured, large-scale changes. Both agents are wired to the Engram persistent memory system so context survives across sessions, compactions, and context-window resets.
+
+## Agents in this config
+
+<CardGroup cols={2}>
+  <Card title="tony stark" icon="helmet-safety" href="/agent/personality">
+    **Primary agent — Mentor & Architect mode**
+
+    Loaded directly from `AGENTS.md`. A Senior Architect with 15+ years of experience, GDE & MVP credentials, Colombian coastal personality, and an absolute refusal to hand you code without understanding. Tools: `edit`, `write`.
+  </Card>
+  <Card title="sdd-orchestrator" icon="diagram-project" href="/sdd/overview">
+    **Primary agent — SDD Coordinator**
+
+    Coordinates the full Spec-Driven Development workflow: explore → propose → spec → design → tasks → apply → verify → archive. Delegates all real work to hidden sub-agents; never inflates its own context. Tools: `bash`, `delegate`, `delegation_list`, `delegation_read`, `edit`, `read`, `write`.
+  </Card>
+</CardGroup>
+
+## How to activate Tony Stark
+
+Tony Stark is configured as a `primary` mode agent in `opencode.json`, so it appears in the OpenCode agent picker alongside any other primary agents you have installed.
+
+<Steps>
+  <Step title="Open an OpenCode session">
+    Launch OpenCode in your project directory as usual.
+  </Step>
+  <Step title="Select the agent">
+    Open the agent picker (default shortcut: `/` or the model/agent selector in the chat bar) and choose **tony stark** from the list.
+  </Step>
+  <Step title="Start the conversation">
+    Type your first message. Tony Stark will immediately search Engram for prior context about the project before responding.
+  </Step>
+</Steps>
+
+<Note>
+  You can also reference the agent by typing `tony stark` in a session that supports inline agent switching. Tony Stark's prompt is loaded directly from the `AGENTS.md` file in the config repo via the `{file:./AGENTS.md}` directive in `opencode.json`.
+</Note>
+
+## What Tony Stark will and won't do
+
+Understanding the boundaries upfront saves you from frustration — the push-back is intentional and part of the value.
+
+<Tabs>
+  <Tab title="Will do">
+    - Explain **why** something is architecturally wrong before suggesting a fix
+    - Use construction and engineering analogies to make abstract concepts concrete
+    - Propose alternatives with real tradeoffs instead of giving a single answer
+    - Auto-load context-specific skills (e.g. `go-testing` when it detects Go tests)
+    - Proactively save decisions, bug fixes, and discoveries to Engram memory
+    - Verify technical claims against code or docs before stating them as fact
+    - Acknowledge mistakes — with evidence — when it's wrong
+    - End every session with a mandatory `mem_session_summary` so the next session starts with full context
+  </Tab>
+  <Tab title="Won't do">
+    - Hand you code **without context or understanding** — expect to be asked why first
+    - Agree with incorrect claims without saying "let me verify" and checking the source
+    - Add "Co-Authored-By" or AI attribution to commits
+    - Continue after asking a question — it stops and waits for your answer
+    - Build after changes (no silent side-effects from tool use)
+    - Assume answers — if something is ambiguous, it asks
+    - Take shortcuts or rush to an answer when the fundamentals haven't been established
+  </Tab>
+</Tabs>
+
+## Tools available to Tony Stark
+
+The `tony stark` agent in `opencode.json` is intentionally scoped to a minimal, focused tool set:
+
+| Tool | Purpose |
+|------|---------|
+| `edit` | Modify existing files — used only after explaining the change |
+| `write` | Create new files — similarly gated by context and reasoning |
+
+All other tools (`bash`, `read`, `delegate`) are intentionally absent. Tony Stark is a mentor and architect, not an autonomous executor. If you need automated multi-file operations, switch to the `sdd-orchestrator` agent.
+
+## Explore further
+
+<CardGroup cols={3}>
+  <Card title="Personality & Philosophy" icon="brain" href="/agent/personality">
+    Deep dive into Tony Stark's language rules, Colombian coastal tone, core philosophy pillars, and exact behavior when you ask a bad question.
+  </Card>
+  <Card title="Engram Memory" icon="database" href="/agent/engram-memory">
+    How persistent cross-session memory works, when the agent saves automatically, the session-close protocol, and what happens after a compaction.
+  </Card>
+  <Card title="SDD Overview" icon="layer-group" href="/sdd/overview">
+    The full Spec-Driven Development workflow coordinated by the `sdd-orchestrator` agent — from exploration to archived change records.
+  </Card>
+</CardGroup>

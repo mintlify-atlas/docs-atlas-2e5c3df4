@@ -1,0 +1,233 @@
+---
+title: "Permission Configuration for OpenCode Agents"
+sidebarTitle: "Permissions"
+description: "Configure what OpenCode agents can do — bash command allowlists/denylists, file read restrictions, and per-agent permission overrides in opencode.json."
+---
+
+Permissions in OpenCode Config Agent control what agents are allowed to do during a session — which shell commands they can run, which files they can read, and which other agents they can delegate work to. The global permission block in `opencode.json` establishes baseline rules for all agents, while individual agents can declare their own overrides on top.
+
+## Global permission structure
+
+The top-level `permission` block in `opencode.json` has two keys: `bash` and `read`.
+
+```json
+"permission": {
+  "bash": { ... },
+  "read": { ... }
+}
+```
+
+Each key maps command or file-path patterns to an action value:
+
+| Value | Behavior |
+|---|---|
+| `"allow"` | The action is permitted without prompting |
+| `"ask"` | OpenCode will pause and ask for confirmation before proceeding |
+| `"deny"` | The action is blocked entirely |
+
+Patterns are matched in order of specificity — more specific patterns take precedence over the catch-all `"*"`.
+
+---
+
+## Bash permissions
+
+The `bash` block governs which shell commands agents can execute.
+
+```json
+"bash": {
+  "*": "allow",
+  "git commit *": "ask",
+  "git push": "ask",
+  "git push *": "ask",
+  "git push --force *": "ask",
+  "git rebase *": "ask",
+  "git reset --hard *": "ask"
+}
+```
+
+### How it works
+
+- **`"*": "allow"`** — all bash commands are permitted by default. Agents can run tests, build tools, install packages, and read the filesystem freely.
+- **Specific `"ask"` patterns** — destructive or irreversible git operations require explicit confirmation before running. This gives you a checkpoint before the agent commits, pushes, force-pushes, rebases, or hard-resets.
+
+### Pattern matching
+
+Patterns use glob-style matching where `*` matches any sequence of characters, including spaces. This means `"git push *"` matches `git push origin main`, `git push --tags`, and any other `git push` invocation with arguments.
+
+<Tip>
+  The order of keys in the JSON object does not determine match priority — OpenCode uses specificity. A pattern like `"git push --force *"` is more specific than `"git push *"` and will take precedence when both match.
+</Tip>
+
+### Common customizations
+
+<CodeGroup>
+```json Add a deny rule
+"bash": {
+  "*": "allow",
+  "rm -rf *": "deny",
+  "git push --force *": "deny"
+}
+```
+
+```json Tighten everything to ask-first
+"bash": {
+  "*": "ask"
+}
+```
+
+```json Allow git operations silently
+"bash": {
+  "*": "allow"
+}
+```
+</CodeGroup>
+
+<Warning>
+  Changing `"*": "allow"` to `"*": "deny"` for bash will break most SDD subagents. Phases like `sdd-apply`, `sdd-verify`, and `sdd-init` rely on running test commands, build tools, and diagnostic scripts. If you need a restrictive baseline, use `"*": "ask"` rather than `"*": "deny"`.
+</Warning>
+
+---
+
+## Read permissions
+
+The `read` block controls which files agents are allowed to read from disk.
+
+```json
+"read": {
+  "*": "allow",
+  "**/.env": "deny",
+  "**/.env.*": "deny",
+  "**/credentials.json": "deny",
+  "**/secrets/**": "deny",
+  "*.env": "deny",
+  "*.env.*": "deny"
+}
+```
+
+### How it works
+
+- **`"*": "allow"`** — agents can read any file by default.
+- **Deny patterns** — sensitive files that typically contain credentials or secrets are blocked. This prevents agents from accidentally including secret values in their context or leaking them through tool output.
+
+### Blocked file patterns
+
+| Pattern | What it blocks |
+|---|---|
+| `**/.env` | `.env` files at any depth in the directory tree |
+| `**/.env.*` | `.env.local`, `.env.production`, `.env.test`, etc. at any depth |
+| `**/credentials.json` | Any `credentials.json` file at any depth |
+| `**/secrets/**` | Any file inside a `secrets/` directory at any depth |
+| `*.env` | `.env`-style files in the current directory |
+| `*.env.*` | `.env.local`-style files in the current directory |
+
+### Adding custom deny patterns
+
+To block additional sensitive paths, add entries to the `read` block:
+
+```json
+"read": {
+  "*": "allow",
+  "**/.env": "deny",
+  "**/.env.*": "deny",
+  "**/credentials.json": "deny",
+  "**/secrets/**": "deny",
+  "*.env": "deny",
+  "*.env.*": "deny",
+  "**/private/**": "deny",
+  "**/*.pem": "deny",
+  "**/*.key": "deny"
+}
+```
+
+---
+
+## Per-agent permissions
+
+Individual agents can declare a `permission` block inside their agent definition. These rules layer on top of the global permission block and apply only to that agent.
+
+### sdd-orchestrator task permission
+
+The `sdd-orchestrator` agent has a `task` permission override:
+
+```json
+"sdd-orchestrator": {
+  "permission": {
+    "task": {
+      "*": "deny",
+      "sdd-*": "allow"
+    }
+  }
+}
+```
+
+The `task` key governs which agents the orchestrator is allowed to delegate synchronous tasks to. With this configuration:
+
+- The orchestrator **cannot** delegate to arbitrary agent names.
+- The orchestrator **can only** delegate to agents whose names match `sdd-*` (e.g. `sdd-apply`, `sdd-verify`, `sdd-explore`).
+
+This is a security boundary: even if an attacker or a runaway prompt tried to redirect delegation to an unrelated agent, the permission rule would block it.
+
+<Note>
+  The `task` permission type controls synchronous delegation (where the orchestrator waits for the result). Async delegation via `delegate` is governed separately. The orchestrator uses `task` for phases where it needs the result before proceeding to the next phase.
+</Note>
+
+### Adding per-agent overrides
+
+You can add a `permission` block to any agent. For example, to prevent `tony stark` from running any bash commands:
+
+```json
+"tony stark": {
+  "permission": {
+    "bash": {
+      "*": "deny"
+    }
+  }
+}
+```
+
+Or to restrict a custom agent to only reading files in a specific directory:
+
+```json
+"my-reviewer": {
+  "permission": {
+    "read": {
+      "*": "deny",
+      "./src/**": "allow"
+    }
+  }
+}
+```
+
+---
+
+## How to customize
+
+<Steps>
+  <Step title="Open opencode.json">
+    Open `~/.config/opencode/opencode.json` in your editor.
+  </Step>
+  <Step title="Edit the permission block">
+    Add, change, or remove patterns under the `bash` or `read` keys. Changes take effect the next time you start OpenCode.
+    
+    ```json
+    "permission": {
+      "bash": {
+        "*": "allow",
+        "rm -rf *": "deny",
+        "git commit *": "ask",
+        "git push *": "ask"
+      },
+      "read": {
+        "*": "allow",
+        "**/.env": "deny",
+        "**/.env.*": "deny",
+        "**/credentials.json": "deny",
+        "**/secrets/**": "deny"
+      }
+    }
+    ```
+  </Step>
+  <Step title="Restart OpenCode">
+    Reload your OpenCode session for changes to take effect.
+  </Step>
+</Steps>

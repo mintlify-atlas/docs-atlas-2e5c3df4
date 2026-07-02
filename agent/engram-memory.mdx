@@ -1,0 +1,205 @@
+---
+title: "Engram Persistent Memory Protocol for OpenCode"
+sidebarTitle: "Engram Memory"
+description: "Learn how Engram gives OpenCode agents cross-session persistent memory — when to save, when to search, session close protocol, and compaction recovery."
+---
+
+Engram is a persistent memory system that gives OpenCode agents a durable record of decisions, bug fixes, discoveries, and conventions that survives beyond any single session, context window reset, or compaction event. Without it, every new session starts completely blind — no memory of the architecture choices made last week, the gotcha found in the payment module, or the naming convention the team agreed on. With Engram active, the Tony Stark agent and the SDD orchestrator carry continuous, searchable context across every conversation, making each session faster and more coherent than the last.
+
+## How it works
+
+The Engram plugin (`plugins/engram.ts`) sits between OpenCode's event system and a local `engram` Go binary that manages an SQLite-backed observation store. The plugin auto-starts the binary on session open if it is not already running.
+
+```
+OpenCode events
+      │
+      ▼
+plugins/engram.ts   ←── injects MEMORY_INSTRUCTIONS into every system prompt
+      │
+      ▼
+HTTP calls to http://127.0.0.1:7437
+      │
+      ▼
+engram serve (Go binary)
+      │
+      ▼
+SQLite (local, persistent across sessions)
+```
+
+The plugin handles four categories of concerns:
+
+- **Session registration** — creates a session record in engram on `session.created`, keyed to the project name (resolved from git remote origin URL)
+- **Prompt capture** — records every user message (`chat.message` hook) for session context reconstruction
+- **Tool accounting** — counts non-Engram tool calls per session (`tool.execute.after` hook)
+- **System prompt injection** — appends `MEMORY_INSTRUCTIONS` to every outgoing system prompt so the agent always knows the memory protocol, even after compaction
+
+## Proactive save triggers
+
+The agent is instructed to call `mem_save` **immediately and without being asked** after any of the following. This is a mandatory protocol, not a suggestion:
+
+- Architecture or design decision made
+- Team convention documented or established
+- Workflow change agreed upon
+- Tool or library choice made with tradeoffs
+- Bug fix completed (including root cause)
+- Feature implemented with a non-obvious approach
+- Notion / Jira / GitHub artifact created or updated with significant content
+- Configuration change or environment setup completed
+- Non-obvious discovery about the codebase
+- Gotcha, edge case, or unexpected behavior found
+- Pattern established (naming, structure, convention)
+- User preference or constraint learned
+
+The agent runs a self-check after every task: *"Did I make a decision, fix a bug, learn something non-obvious, or establish a convention? If yes — call `mem_save` NOW."*
+
+## `mem_save` format
+
+Every observation saved to Engram follows this structure:
+
+| Field | Description |
+|-------|-------------|
+| `title` | Verb + what — short, searchable. Example: `"Fixed N+1 query in UserList"` |
+| `type` | `bugfix` \| `decision` \| `architecture` \| `discovery` \| `pattern` \| `config` \| `preference` |
+| `scope` | `project` (default) or `personal` |
+| `topic_key` | Stable key for evolving topics — enables upserts instead of duplicate entries. Example: `architecture/auth-model` |
+| `content` | Structured block: **What** (one sentence), **Why** (motivation), **Where** (files/paths), **Learned** (gotchas — omit if none) |
+
+**Topic key rules:**
+- Different topics **must not** overwrite each other
+- The same evolving topic should reuse the same `topic_key` (upsert behaviour)
+- When unsure about the right key, call `mem_suggest_topic_key` first
+- When you have an exact observation ID to correct, use `mem_update`
+
+### Example `mem_save` call
+
+```json
+{
+  "tool": "mem_save",
+  "arguments": {
+    "title": "Chose Zustand over Redux for client state",
+    "type": "decision",
+    "scope": "project",
+    "topic_key": "architecture/client-state",
+    "content": "**What**: Replaced Redux with Zustand for all client-side state management.\n**Why**: Redux overhead was disproportionate for the scale of state being managed; Zustand removes boilerplate and supports slices natively.\n**Where**: src/store/, src/hooks/useAuth.ts, src/hooks/useCart.ts\n**Learned**: Zustand devtools require a separate middleware import — not auto-included like Redux DevTools Extension."
+  }
+}
+```
+
+## When to search memory
+
+The agent searches Engram on two triggers: **reactive** (user asks) and **proactive** (agent decides).
+
+**Reactive — search when the user uses any of these signals:**
+- "remember", "recall", "what did we do", "how did we solve"
+- "recordar", "qué hicimos", "acordate" (Spanish equivalents)
+- Any reference to past work, a previous session, or prior decisions
+
+**Proactive — search without being asked:**
+- Starting work on something that might have been done before
+- User mentions a topic the agent has no current context on
+- User's **first message** references the project, a feature, or a problem — search immediately before responding
+
+**Search sequence:**
+
+<Steps>
+  <Step title="mem_context (fast, cheap)">
+    Check recent session history first. This is a lightweight call that covers the last few sessions.
+  </Step>
+  <Step title="mem_search (if not found)">
+    Run a full-text search with relevant keywords from the user's message against all stored observations.
+  </Step>
+  <Step title="mem_get_observation (if found)">
+    Retrieve the full, untruncated content of the matching observation by ID. Search results are truncated — always follow up with this call.
+  </Step>
+</Steps>
+
+## Session close protocol
+
+Before ending any session — before saying "done", "listo", or "that's it" — the agent **must** call `mem_session_summary`. This is non-negotiable. Skipping it means the next session starts with no record of what was accomplished.
+
+The summary uses a fixed structure:
+
+```markdown
+## Goal
+[What we were working on this session]
+
+## Instructions
+[User preferences or constraints discovered — skip if none]
+
+## Discoveries
+- [Technical findings, gotchas, non-obvious learnings]
+
+## Accomplished
+- [Completed items with key details]
+
+## Next Steps
+- [What remains to be done — for the next session]
+
+## Relevant Files
+- path/to/file — [what it does or what changed]
+```
+
+<Warning>
+  If `mem_session_summary` is skipped at session end, the next session has zero memory of what was done. There is no automatic recovery path — the context is simply gone. The protocol exists precisely because agents cannot be trusted to remember to do this; it is baked into the personality rules as a hard requirement.
+</Warning>
+
+## Compaction recovery
+
+When a session's context window fills up, OpenCode triggers a compaction event. The old agent instance effectively ends, and a new one starts with a compressed summary of the conversation. This is where memory loss typically occurs — and where Engram's compaction hook intervenes.
+
+**What the plugin does during compaction** (`experimental.session.compacting` hook):
+
+1. Fetches recent session context from Engram and injects it into the compaction output — so the new agent starts with persistent memory, not just the compressed transcript
+2. Appends a `CRITICAL INSTRUCTION` into the compaction prompt that tells the compressor to include the following instruction at the top of the compacted summary:
+
+```
+FIRST ACTION REQUIRED: Call mem_session_summary with the content of this compacted
+summary. Use project: '{project}'. This preserves what was accomplished before
+compaction. Do this BEFORE any other work.
+```
+
+**What the agent does when it sees a compaction message:**
+
+<Steps>
+  <Step title="Call mem_session_summary immediately">
+    Persist the compacted summary content to Engram. This is the first action — before any other work. Without it, everything done before compaction is lost from memory.
+  </Step>
+  <Step title="Call mem_context">
+    Recover additional context from previous sessions to rebuild the working picture.
+  </Step>
+  <Step title="Continue working">
+    Only after steps 1 and 2 are complete should normal work resume.
+  </Step>
+</Steps>
+
+## MCP tools reference
+
+Engram exposes its capabilities through MCP tools. The full set tracked by the plugin is defined in the `ENGRAM_TOOLS` constant in `plugins/engram.ts`:
+
+| Tool | Purpose |
+|------|---------|
+| `mem_save` | Save a new memory observation (decision, bug fix, discovery, pattern, etc.) |
+| `mem_search` | Full-text search (FTS5) across all observations in the project |
+| `mem_get_observation` | Retrieve the full, untruncated content of an observation by ID |
+| `mem_context` | Get recent session context — fast and cheap, check this first |
+| `mem_session_summary` | Save a structured session summary (mandatory at session close) |
+| `mem_update` | Update an existing observation by ID (use when you know the exact ID) |
+| `mem_suggest_topic_key` | Ask Engram to suggest a stable `topic_key` before saving, to avoid duplicates |
+| `mem_stats` | Observation and session statistics for the project |
+| `mem_timeline` | Chronological view of observations |
+| `mem_session_start` | Utility — mark a session as started |
+| `mem_session_end` | Utility — mark a session as ended |
+| `mem_delete` | Delete an observation by ID |
+| `mem_save_prompt` | Save a prompt (used internally by the plugin's `chat.message` hook) |
+
+<Note>
+  Engram tools are explicitly excluded from the plugin's tool-call counter. Only non-Engram tool calls are counted in session statistics — so Engram usage never inflates your session's tool usage metrics.
+</Note>
+
+## Sub-agent session suppression
+
+<Warning>
+  Sub-agent sessions — created via OpenCode's `Task()` delegation mechanism — are intentionally **suppressed** from Engram registration. The plugin detects sub-agents by checking for a `parentID` on the session or a title ending in `" subagent)"`. Suppressed sessions are tracked in an internal `subAgentSessions` set, and all `ensureSession`, `chat.message`, and `tool.execute.after` hooks are skipped for them.
+
+  This is a deliberate design decision to prevent session inflation. Without suppression, a single orchestrator conversation spawning 10 sub-agents would register 11 sessions in Engram — making `mem_context` and `mem_timeline` nearly unreadable. The orchestrator session captures the important context; sub-agent sessions are ephemeral execution units.
+</Warning>

@@ -1,0 +1,253 @@
+---
+title: "SDD Workflow: Phase-by-Phase Pipeline for Code Changes"
+sidebarTitle: "Workflow"
+description: "Walk through every phase of the Spec-Driven Development pipeline — what each sub-agent reads, writes, and produces, with the full artifact dependency graph."
+---
+
+Every SDD change flows through up to nine phases, each executed by a dedicated sub-agent. The orchestrator never does phase work itself — it delegates, collects the result, and decides what runs next. This page documents exactly what happens in each phase: what the sub-agent reads, what it writes, and what engram topic key it uses to store its artifact.
+
+## SDD Init Guard
+
+Before executing **any** SDD command, the orchestrator silently checks whether `sdd-init` has been run for the current project.
+
+1. It searches engram: `mem_search(query: "sdd-init/{project}", project: "{project}")`
+2. If found → init was already done. Proceed normally.
+3. If **not** found → delegate to `sdd-init` first, then proceed with the requested command.
+
+This guard ensures that testing capabilities are always detected and cached, Strict TDD Mode is activated when the project supports it, and the full project context (stack, conventions, architecture patterns) is available for all downstream phases. You will never be asked to run init manually — the orchestrator handles it automatically.
+
+## Phase Reference
+
+<AccordionGroup>
+  <Accordion title="Phase 1 — sdd-init: Initialize">
+    The init phase detects everything about your project and bootstraps the artifact persistence backend. It runs exactly once per project (or when you explicitly re-run `/sdd-init` to refresh the context).
+
+    **What it does:**
+    - Reads `package.json`, `go.mod`, `pyproject.toml`, etc. to detect the tech stack
+    - Scans for all testing infrastructure (test runner, unit/integration/E2E layers, coverage tools, quality tools)
+    - Resolves Strict TDD Mode (see below)
+    - Bootstraps the `openspec/` directory if the artifact store is `openspec` or `hybrid`
+    - Builds the skill registry (scans all `*/SKILL.md` files, writes `.atl/skill-registry.md`)
+    - Persists project context and testing capabilities to the active backend
+
+    **Reads:** Project files (package.json, config files, source structure)
+
+    **Writes:**
+    - Engram: `sdd-init/{project}` (project context) and `sdd/{project}/testing-capabilities`
+    - OpenSpec: `openspec/config.yaml`, `openspec/specs/`, `openspec/changes/`
+    - Always: `.atl/skill-registry.md`
+
+    **Engram topic key:** `sdd-init/{project}`
+  </Accordion>
+
+  <Accordion title="Phase 2 — sdd-explore: Explore">
+    The explore phase investigates your codebase for a specific topic or idea. It reads widely, compares approaches, and produces a structured analysis — **without creating or modifying any project files**.
+
+    **What it does:**
+    - Reads project context from engram (optional, if init was already run)
+    - Scans relevant files and directories for the topic
+    - Compares possible implementation approaches
+    - Identifies affected modules, potential risks, and a recommended direction
+
+    **Reads:** Nothing required (reads project context from engram if available)
+
+    **Writes:** `sdd/{change}/explore`
+
+    **Engram topic key:** `sdd/{change}/explore`
+
+    <Note>
+      Exploration is optional but strongly recommended before `/sdd-new`. It gives the proposal phase real codebase context rather than relying on the AI's assumptions.
+    </Note>
+  </Accordion>
+
+  <Accordion title="Phase 3 — sdd-propose: Propose">
+    The propose phase creates a structured change proposal. It reads the exploration artifact (if it exists) and produces a scoped, reviewable proposal that defines what will change and why.
+
+    **What it does:**
+    - Reads the exploration artifact if available
+    - Defines the change scope, goals, and out-of-scope items
+    - Identifies affected modules and packages
+    - Documents risks and includes a rollback plan
+    - Produces a proposal ready for spec and design phases
+
+    **Reads:** `sdd/{change}/explore` (optional)
+
+    **Writes:** `sdd/{change}/proposal`
+
+    **Engram topic key:** `sdd/{change}/proposal`
+  </Accordion>
+
+  <Accordion title="Phase 4 — sdd-design: Design">
+    The design phase takes the proposal and produces a full technical design. It runs in parallel with the spec phase — both depend on the proposal, and tasks depend on both.
+
+    **What it does:**
+    - Reads the proposal (required)
+    - Produces architecture decisions with explicit rationale
+    - Includes sequence diagrams for complex flows
+    - Documents technical approach, data models, and integration points
+    - Records decisions that `sdd-apply` must follow
+
+    **Reads:** `sdd/{change}/proposal` (required)
+
+    **Writes:** `sdd/{change}/design`
+
+    **Engram topic key:** `sdd/{change}/design`
+  </Accordion>
+
+  <Accordion title="Phase 5 — sdd-spec: Spec">
+    The spec phase produces detailed behavioral specifications in Given/When/Then format using RFC 2119 keywords (MUST, SHALL, SHOULD, MAY). These scenarios become the acceptance criteria that `sdd-verify` checks against.
+
+    **What it does:**
+    - Reads the proposal (required)
+    - Writes detailed specifications for every feature and edge case
+    - Uses Given/When/Then scenario format
+    - Uses RFC 2119 keywords for requirement strength
+    - Produces the specification document that `sdd-tasks` and `sdd-verify` depend on
+
+    **Reads:** `sdd/{change}/proposal` (required)
+
+    **Writes:** `sdd/{change}/spec`
+
+    **Engram topic key:** `sdd/{change}/spec`
+  </Accordion>
+
+  <Accordion title="Phase 6 — sdd-tasks: Tasks">
+    The tasks phase breaks the spec and design down into concrete, session-sized implementation tasks. It requires **both** spec and design to be complete first.
+
+    **What it does:**
+    - Reads both the spec and design artifacts (both required)
+    - Groups tasks by phase: infrastructure → implementation → testing
+    - Uses hierarchical numbering (1.1, 1.2, 2.1, etc.)
+    - Keeps each task small enough to complete in one session
+    - Produces the task list that `sdd-apply` executes against
+
+    **Reads:** `sdd/{change}/spec` + `sdd/{change}/design` (both required)
+
+    **Writes:** `sdd/{change}/tasks`
+
+    **Engram topic key:** `sdd/{change}/tasks`
+  </Accordion>
+
+  <Accordion title="Phase 7 — sdd-apply: Apply">
+    The apply phase executes the implementation. It reads tasks, spec, and design, then writes code following the project's conventions. When Strict TDD Mode is active, it follows a RED → GREEN → REFACTOR cycle for every task.
+
+    **What it does:**
+    - Reads tasks, spec, design, and previous apply-progress (if continuing a batch)
+    - Implements each incomplete task in order
+    - Marks tasks complete (`[x]`) as it goes, updating the tasks artifact
+    - Saves incremental progress after each batch
+    - When TDD is active: writes failing test → implements minimum code to pass → refactors
+
+    **Reads:** `sdd/{change}/tasks` + `sdd/{change}/spec` + `sdd/{change}/design` + `sdd/{change}/apply-progress` (if exists)
+
+    **Writes:** `sdd/{change}/apply-progress`
+
+    **Engram topic key:** `sdd/{change}/apply-progress`
+
+    <Warning>
+      When continuing a multi-batch apply, the sub-agent **must** read the existing apply-progress, merge new progress with it, and save the combined result. It must never overwrite — see the Apply-Progress Continuity section below.
+    </Warning>
+  </Accordion>
+
+  <Accordion title="Phase 8 — sdd-verify: Verify">
+    The verify phase validates the implementation against the specifications. It produces a structured report with findings categorized as CRITICAL, WARNING, or SUGGESTION.
+
+    **What it does:**
+    - Reads spec, tasks, and apply-progress (all required)
+    - Checks completeness: are all tasks marked done?
+    - Checks correctness: does the code match every spec scenario?
+    - Checks coherence: were the design decisions followed?
+    - Runs tests and build (real execution, not simulated)
+    - Builds a spec compliance matrix
+
+    **Reads:** `sdd/{change}/spec` + `sdd/{change}/tasks` + `sdd/{change}/apply-progress`
+
+    **Writes:** `sdd/{change}/verify-report`
+
+    **Engram topic key:** `sdd/{change}/verify-report`
+  </Accordion>
+
+  <Accordion title="Phase 9 — sdd-archive: Archive">
+    The archive phase closes the change. It reads all artifacts, writes a final archive report, syncs delta specs into the main spec directory, and marks the change as complete.
+
+    **What it does:**
+    - Reads all artifacts: proposal, spec, design, tasks, verify-report (all required)
+    - Confirms the verify report shows the change is ready
+    - Syncs delta specs into `openspec/specs/` (source of truth)
+    - Records all observation IDs in the archive report for traceability
+    - Moves the change folder to archive with a date prefix
+
+    **Reads:** All prior artifacts
+
+    **Writes:** `sdd/{change}/archive-report`
+
+    **Engram topic key:** `sdd/{change}/archive-report`
+  </Accordion>
+</AccordionGroup>
+
+## Engram Topic Key Format
+
+Every artifact is stored in engram using a predictable topic key. The orchestrator passes these keys to sub-agents as artifact references — sub-agents always retrieve full content via `mem_search` → `mem_get_observation` (search results are capped at 300-character previews).
+
+| Artifact | Topic Key |
+|----------|-----------|
+| Project context | `sdd-init/{project}` |
+| Exploration | `sdd/{change}/explore` |
+| Proposal | `sdd/{change}/proposal` |
+| Spec | `sdd/{change}/spec` |
+| Design | `sdd/{change}/design` |
+| Tasks | `sdd/{change}/tasks` |
+| Apply progress | `sdd/{change}/apply-progress` |
+| Verify report | `sdd/{change}/verify-report` |
+| Archive report | `sdd/{change}/archive-report` |
+| DAG state | `sdd/{change}/state` |
+
+## Strict TDD Mode
+
+When `sdd-init` detects a test runner in the project, it sets `strict_tdd: true` and caches it in engram. Before launching `sdd-apply` or `sdd-verify`, the orchestrator searches for this value and, if found, injects the following instruction into the sub-agent prompt:
+
+```
+STRICT TDD MODE IS ACTIVE. Test runner: {test_command}.
+You MUST follow strict-tdd.md. Do NOT fall back to Standard Mode.
+```
+
+This is non-negotiable. The orchestrator resolves TDD status once per session (at the first apply or verify launch) and caches it. Sub-agents do not discover TDD mode independently — the orchestrator always injects the instruction explicitly.
+
+The resolution priority chain:
+1. System prompt marker (`gentle-ai:sdd-model-assignments`) — highest priority
+2. `openspec/config.yaml` → `strict_tdd` field
+3. If no config found but a test runner exists → default to `strict_tdd: true`
+4. If no test runner → `strict_tdd: false`
+
+## Apply-Progress Continuity
+
+Large changes may require multiple apply batches. When launching `sdd-apply` for a continuation batch (not the first), the orchestrator:
+
+1. Searches for existing apply-progress: `mem_search(query: "sdd/{change}/apply-progress", ...)`
+2. If found, injects this into the sub-agent prompt:
+
+```
+PREVIOUS APPLY-PROGRESS EXISTS at topic_key 'sdd/{change}/apply-progress'.
+You MUST read it first via mem_search + mem_get_observation, merge your new
+progress with the existing progress, and save the combined result.
+Do NOT overwrite — MERGE.
+```
+
+The sub-agent owns the read-merge-write cycle. The orchestrator's responsibility is to tell it that previous progress exists.
+
+## Result Contract
+
+Every phase sub-agent returns a structured envelope with the same fields:
+
+| Field | Description |
+|-------|-------------|
+| `status` | `success`, `partial`, or `error` |
+| `executive_summary` | One-paragraph summary of what was done |
+| `artifacts` | List of artifact keys written |
+| `next_recommended` | Which phase should run next |
+| `risks` | Any risks or blockers identified |
+| `skill_resolution` | `injected`, `fallback-registry`, `fallback-path`, or `none` |
+
+<Note>
+  The orchestrator checks `skill_resolution` after every delegation. If it is anything other than `injected`, it re-reads the skill registry immediately and injects compact rules into all subsequent delegations. This is a self-correction mechanism for context loss from compaction.
+</Note>

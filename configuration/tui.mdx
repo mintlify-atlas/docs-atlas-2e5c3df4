@@ -1,0 +1,115 @@
+---
+title: "TUI Configuration: OpenCode Terminal Interface Settings"
+sidebarTitle: "TUI"
+description: "Configure the OpenCode terminal UI with tui.json — enable the subagent status line plugin and customize how delegations and background agents are displayed."
+---
+
+The `tui.json` file configures OpenCode's terminal user interface. While `opencode.json` controls AI behavior — agents, prompts, MCP servers, and permissions — `tui.json` controls what you _see_ in the terminal: the visual layout, status indicators, and UI plugins that render information about what agents are doing in real time.
+
+## Current configuration
+
+OpenCode Config Agent ships with the following `tui.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/tui.json",
+  "plugin": ["opencode-subagent-statusline"]
+}
+```
+
+<ParamField path="$schema" type="string">
+  Points to the OpenCode TUI JSON schema for editor validation and autocompletion.
+</ParamField>
+
+<ParamField path="plugin" type="string[]">
+  An array of TUI plugin names to load. TUI plugins render UI elements in the terminal interface. These are separate from the AI-layer plugins configured in `opencode.json`.
+</ParamField>
+
+---
+
+## opencode-subagent-statusline plugin
+
+The `opencode-subagent-statusline` plugin adds a live status line to the OpenCode TUI that shows background agent activity as it happens.
+
+When the `sdd-orchestrator` delegates work to subagents, those agents run in the background while the orchestrator waits for results. Without visibility into this, the terminal appears idle even while multiple subagents are actively working. The statusline plugin surfaces that activity:
+
+- **How many subagents are currently running** — shows a count of active background delegations
+- **What each agent is doing** — shows the name and status of each running subagent
+- **Completion state** — updates in real time as agents finish their work and return results
+
+This is powered by the BackgroundAgents plugin inside OpenCode and gives you confidence that the orchestrator is making progress even during long-running phases like `sdd-apply` or `sdd-explore`.
+
+<Note>
+  The statusline only shows activity when the `sdd-orchestrator` (or another agent with `delegate` tool access) is actively running background delegations. It stays quiet during normal single-agent conversations.
+</Note>
+
+---
+
+## plugin field
+
+The `plugin` array in `tui.json` is a list of TUI plugin names to activate. Each entry is a plugin identifier — the same name used when the plugin was installed or registered.
+
+```json
+{
+  "$schema": "https://opencode.ai/tui.json",
+  "plugin": ["opencode-subagent-statusline"]
+}
+```
+
+<Warning>
+  TUI plugins (`tui.json`) and AI-layer plugins (`opencode.json`) are **different systems**. A TUI plugin only affects what you see in the terminal; it does not give agents new tools or change their behavior. Do not add TUI plugin names to the `plugin` array in `opencode.json`, or vice versa.
+</Warning>
+
+---
+
+## Adding TUI plugins
+
+To add additional TUI plugins, append their names to the `plugin` array:
+
+```json
+{
+  "$schema": "https://opencode.ai/tui.json",
+  "plugin": [
+    "opencode-subagent-statusline",
+    "your-tui-plugin"
+  ]
+}
+```
+
+<Steps>
+  <Step title="Find a TUI plugin">
+    TUI plugins are distributed as npm packages or registered plugins compatible with the OpenCode TUI plugin API.
+  </Step>
+  <Step title="Add the plugin name to tui.json">
+    Open `~/.config/opencode/tui.json` and add the plugin identifier to the `plugin` array.
+    
+    ```json
+    {
+      "$schema": "https://opencode.ai/tui.json",
+      "plugin": [
+        "opencode-subagent-statusline",
+        "your-tui-plugin"
+      ]
+    }
+    ```
+  </Step>
+  <Step title="Restart OpenCode">
+    Reload your OpenCode session to activate the new TUI plugin.
+  </Step>
+</Steps>
+
+---
+
+## tui.json vs opencode.json
+
+| | `tui.json` | `opencode.json` |
+|---|---|---|
+| **Controls** | Terminal UI appearance and widgets | Agent behavior, prompts, MCP servers |
+| **Plugin type** | UI rendering plugins | AI capability plugins |
+| **Schema** | `https://opencode.ai/tui.json` | `https://opencode.ai/config.json` |
+| **Affects agents** | No | Yes |
+| **Affects display** | Yes | No |
+
+<Tip>
+  Keep both files at `~/.config/opencode/`. OpenCode loads them from the same directory automatically — no additional path configuration is needed.
+</Tip>

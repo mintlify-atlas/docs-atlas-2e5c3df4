@@ -1,0 +1,184 @@
+---
+title: "Skill Registry: Catalog and Index Your Project Skills"
+sidebarTitle: "Skill Registry"
+description: "The skill-registry skill scans all available skills and project conventions, generates compact rules, and writes .atl/skill-registry.md for the orchestrator to read at session start."
+---
+
+The skill registry is the index that makes auto-loading work. It implements a **build-once / read-cheaply** pattern: running the registry is relatively expensive (it reads every `SKILL.md` in every known skill directory), but once built, the resulting `.atl/skill-registry.md` is a single lightweight file the orchestrator reads once per session and caches in memory. Every subsequent sub-agent delegation is cheap — the compact rules are already digested, matched, and injected directly into each prompt without touching the filesystem again.
+
+## When to Run
+
+Run the skill-registry after any of these events:
+
+- Installing or removing a skill
+- Setting up a new project for the first time
+- After `/sdd-init` completes
+- When the user says "update skills", "skill registry", "actualizar skills", or "update registry"
+
+## What It Scans
+
+### User-Level (Global) Skill Directories
+
+The registry checks all of these on every run — it scans ALL paths that exist, not just the first match:
+
+| Tool | Path |
+|------|------|
+| OpenCode | `~/.config/opencode/skills/` |
+| Claude Code | `~/.claude/skills/` |
+| Gemini CLI | `~/.gemini/skills/` |
+| Cursor | `~/.cursor/skills/` |
+| VS Code Copilot | `~/.copilot/skills/` |
+
+### Project-Level Skill Directories
+
+| Tool | Path |
+|------|------|
+| Claude Code | `{project-root}/.claude/skills/` |
+| Gemini CLI | `{project-root}/.gemini/skills/` |
+| Antigravity / generic | `{project-root}/.agent/skills/` |
+| Generic fallback | `{project-root}/skills/` |
+
+<Note>
+  Project-level skills take priority over user-level skills with the same name. If both exist, only the project-level version appears in the registry.
+</Note>
+
+### Skipped Directories
+
+The scanner always skips:
+- `sdd-*` directories — SDD workflow skills, not coding/task skills
+- `_shared` — internal shared utilities for the SDD workflow
+- `skill-registry` itself — the registry doesn't index itself
+
+### Convention Files
+
+After scanning skill directories, the registry also checks the project root for agent convention files:
+
+| File | Notes |
+|------|-------|
+| `AGENTS.md` / `agents.md` | Index file — all referenced paths are extracted and included |
+| `CLAUDE.md` | Project-level only (not `~/.claude/CLAUDE.md`) |
+| `.cursorrules` | Cursor convention file |
+| `GEMINI.md` | Gemini CLI convention file |
+| `copilot-instructions.md` | VS Code Copilot convention file |
+
+When an index file (like `AGENTS.md`) is found, the registry reads it, extracts every referenced file path, and includes all of them in the Project Conventions table — so sub-agents have zero extra hops to discover project rules.
+
+## What It Produces
+
+The registry generates `.atl/skill-registry.md` with three sections:
+
+### `.atl/skill-registry.md` Format
+
+```markdown
+# Skill Registry
+
+**Delegator use only.** Any agent that launches sub-agents reads this registry
+to resolve compact rules, then injects them directly into sub-agent prompts.
+Sub-agents do NOT read this registry or individual SKILL.md files.
+
+See `_shared/skill-resolver.md` for the full resolution protocol.
+
+## User Skills
+
+| Trigger | Skill | Path |
+|---------|-------|------|
+| When writing Go tests, using teatest, or adding test coverage | go-testing | ~/.config/opencode/skills/go-testing/SKILL.md |
+| When creating a pull request, opening a PR, or preparing changes for review | branch-pr | ~/.config/opencode/skills/branch-pr/SKILL.md |
+| When user says "judgment day", "adversarial review", "dual review" | judgment-day | ~/.config/opencode/skills/judgment-day/SKILL.md |
+| When user asks to create a new skill or write SKILL.md files | skill-creator | ~/.config/opencode/skills/skill-creator/SKILL.md |
+| When creating a GitHub issue, reporting a bug, or requesting a feature | issue-creation | ~/.config/opencode/skills/issue-creation/SKILL.md |
+
+## Compact Rules
+
+Pre-digested rules per skill. Delegators copy matching blocks into sub-agent
+prompts as `## Project Standards (auto-resolved)`.
+
+### go-testing
+- Table-driven tests: use []struct{name, input, expected, wantErr} + t.Run
+- Model state testing: call m.Update(tea.KeyMsg{...}) and assert m.Screen directly
+- Full flows: use teatest.NewTestModel(t, m) + WaitFinished + FinalModel
+- Visual output: golden files in testdata/, regenerate with -update flag
+- Always test both success and error cases when a function returns error
+- Use t.TempDir() for any test that touches the filesystem
+
+### branch-pr
+- Every PR must link an issue with status:approved — no exceptions
+- Branch names must match: ^(feat|fix|chore|docs|style|refactor|perf|test|build|ci|revert)\/[a-z0-9._-]+$
+- Commit messages must match conventional commit format
+- Add exactly one type:* label per PR
+- Run shellcheck on all modified shell scripts before pushing
+- PR body must contain: Closes #N, type checkbox, summary, changes table, test plan, checklist
+
+### judgment-day
+- Launch Judge A and Judge B in parallel (delegate async) — never sequential
+- Orchestrator never reviews code itself — coordination only
+- Classify warnings: real (normal user can trigger) vs theoretical (contrived conditions)
+- Fix only confirmed issues (found by both judges)
+- Re-judge after every fix round before pushing or committing
+- After 2 iterations, ask user before continuing — never escalate automatically
+
+### skill-creator
+- description field MUST include a Trigger: line for auto-loading to work
+- Compact rules: actionable rules only — no motivation, no full examples, no install steps
+- Name pattern: {technology} | {project}-{component} | {action}-{target}
+- After creating, run skill-registry to rebuild the index
+- Always add skill to AGENTS.md after creation
+
+### issue-creation
+- Use bug_report.yml or feature_request.yml templates — blank issues are disabled
+- Issues get status:needs-review automatically; maintainer must add status:approved
+- Only open a PR after the linked issue has status:approved
+- Questions go to Discussions, not issues
+
+## Project Conventions
+
+| File | Path | Notes |
+|------|------|-------|
+| AGENTS.md | ./AGENTS.md | Index — references files below |
+| Skills directory | ./skills/ | All project skills |
+```
+
+## How the Orchestrator Uses the Registry
+
+<Steps>
+  <Step title="Read once at session start">
+    The orchestrator reads `.atl/skill-registry.md` (or queries engram for `topic_key: "skill-registry"`) at the start of a session or on its first delegation. The entire registry is loaded into the session cache.
+  </Step>
+  <Step title="Cache compact rules in memory">
+    The pre-digested Compact Rules section is kept in memory for the duration of the session. No further filesystem reads are needed for skill injection.
+  </Step>
+  <Step title="Match and inject on every sub-agent launch">
+    For each sub-agent delegation, the orchestrator matches the registry's User Skills table by code context (file extensions, paths) and task context (what the agent will do), then copies the matching compact rules blocks into the prompt as `## Project Standards (auto-resolved)` — before the task-specific instructions.
+  </Step>
+</Steps>
+
+## Triggering an Update
+
+Say any of these phrases in chat to rebuild the registry:
+
+- `"update skills"`
+- `"skill registry"`
+- `"actualizar skills"`
+- `"update registry"`
+
+Or run `/sdd-init` when setting up a new project — it calls the registry logic as part of initialization.
+
+## Engram Integration
+
+If the `mem_save` tool is available, the registry also saves to engram after writing the file:
+
+```
+mem_save(
+  title: "skill-registry",
+  topic_key: "skill-registry",
+  type: "config",
+  project: "{project}",
+  content: "{registry markdown}"
+)
+```
+
+Using a stable `topic_key` means every subsequent registry update is an upsert — only one observation ever exists per project. The orchestrator queries engram first (`mem_search` → `mem_get_observation`) and falls back to `.atl/skill-registry.md` if engram is unavailable or the topic is not found.
+
+<Note>
+  The `.atl/` directory is added to `.gitignore` automatically if it exists. The skill registry is a generated build artifact — it should not be committed to version control.
+</Note>

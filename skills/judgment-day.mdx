@@ -1,0 +1,132 @@
+---
+title: "Judgment Day Skill: Adversarial Code Review"
+sidebarTitle: "Judgment Day"
+description: "Judgment Day is an adversarial review skill that critiques code with the perspective of a hostile security auditor — finding bugs, architecture flaws, and hidden vulnerabilities."
+---
+
+Judgment Day is an adversarial code review protocol that launches two independent judge sub-agents in parallel against the same target. Neither judge knows the other exists — no cross-contamination, no shared blind spots. The orchestrator then synthesizes their findings into a structured verdict, delegates fixes for confirmed issues, and re-judges until both agents return clean or the user decides to escalate. The result is a high-confidence review that is far harder to fool than a single pass.
+
+## Trigger
+
+This skill activates when the user says any of:
+- `"judgment day"` / `"judgment-day"` / `"juzgar"` / `"que lo juzguen"`
+- `"adversarial review"` / `"dual review"` / `"doble review"`
+- After significant feature implementations before merging
+
+## Review Methodology
+
+### Parallel Blind Review
+
+Two sub-agents — Judge A and Judge B — are delegated **simultaneously** (async, not sequential). Each receives the same target description and review criteria but works in complete isolation. The orchestrator never reviews code itself; its role is coordination, synthesis, and decision-making only.
+
+Both judges are also injected with `## Project Standards (auto-resolved)` from the skill registry, so they review against project-specific patterns, not just generic best practices.
+
+### Finding Classification
+
+Every finding must be classified into one of four severity levels:
+
+| Severity | Meaning |
+|----------|---------|
+| `CRITICAL` | Definite bug, data loss, or security hole — fix required |
+| `WARNING (real)` | Causes incorrect behavior in a realistic production scenario — fix required |
+| `WARNING (theoretical)` | Only triggerable via contrived or impossible conditions — reported as INFO, not fixed |
+| `SUGGESTION` | Style, naming, or minor improvements — fixed inline if trivial, no re-judge |
+
+<Tip>
+  The key question for classifying a warning: **"Can a normal user, using the tool as intended, trigger this?"** If yes → real. If it requires a malicious manifest, a renamed home directory, a sub-millisecond race condition, or an OS edge case that doesn't apply to the project's target platforms → theoretical.
+</Tip>
+
+### Verdict Synthesis
+
+After both judges return, the orchestrator categorizes every finding:
+
+| Category | Definition | Action |
+|----------|-----------|--------|
+| **Confirmed** | Found by BOTH judges | High confidence — fix immediately (with user approval) |
+| **Suspect A** | Found ONLY by Judge A | Triage — escalate to user if needed |
+| **Suspect B** | Found ONLY by Judge B | Triage — escalate to user if needed |
+| **Contradiction** | Judges DISAGREE on the same issue | Flag for manual decision |
+
+### Fix and Re-judge Cycle
+
+The protocol iterates until convergence:
+
+<Steps>
+  <Step title="Round 1 — First Judgment">
+    Both judges run in parallel. Orchestrator synthesizes verdict table and presents it to user. Asks: "Fix confirmed issues?"
+  </Step>
+  <Step title="Fix Agent">
+    A separate Fix Agent delegation applies only the confirmed issues. It receives the same `## Project Standards (auto-resolved)` block and fixes patterns consistently across all affected files.
+  </Step>
+  <Step title="Round 2 — Re-judgment">
+    Both judges re-run in parallel (fresh, blind, same scope). If clean → **APPROVED ✅**. If confirmed CRITICALs remain → proceed to Round 3.
+  </Step>
+  <Step title="Convergence Threshold">
+    After 2 fix iterations, if issues remain, the orchestrator asks the user: "Issues remain after 2 iterations. Continue iterating?" The user decides — the protocol never escalates automatically.
+  </Step>
+</Steps>
+
+<Warning>
+  The orchestrator **must not** run `git push`, `git commit`, or declare "done" until every active Judgment Day target reaches a terminal state (APPROVED or ESCALATED). Re-judgment always runs before any code-modifying action.
+</Warning>
+
+## Example Output
+
+A Judgment Day verdict looks like this:
+
+```markdown
+## Judgment Day — auth module
+
+### Round 1 — Verdict
+
+| Finding | Judge A | Judge B | Severity | Status |
+|---------|---------|---------|----------|--------|
+| Missing null check in auth.go:42 | ✅ | ✅ | CRITICAL | Confirmed |
+| Race condition in worker.go:88 | ✅ | ❌ | WARNING (real) | Suspect (A only) |
+| Windows volume root edge case | ❌ | ✅ | WARNING (theoretical) | INFO — reported |
+| Naming mismatch in handler.go:15 | ❌ | ✅ | SUGGESTION | Suspect (B only) |
+| Error swallowed in db.go:201 | ✅ | ✅ | WARNING (real) | Confirmed |
+
+**Confirmed issues**: 1 CRITICAL, 1 WARNING (real)
+**Suspect issues**: 1 WARNING, 1 SUGGESTION
+**Contradictions**: none
+
+### Fixes Applied (Round 1)
+- `auth.go:42` — Added nil check before dereferencing user pointer
+- `db.go:201` — Propagated error instead of silently returning nil
+
+### Round 2 — Re-judgment
+- Judge A: PASS ✅ — No issues found
+- Judge B: PASS ✅ — No issues found
+
+---
+
+### JUDGMENT: APPROVED ✅
+Both judges pass clean. The target is cleared for merge.
+```
+
+If the user stops the process early, the output switches to an escalation format that lists remaining issues and review history for human follow-up.
+
+## Judgment Day vs Normal Code Review
+
+| Scenario | Use Judgment Day | Use Normal Review |
+|----------|-----------------|-------------------|
+| Pre-merge review of a significant feature | ✅ | |
+| Security-sensitive code (auth, payments, secrets) | ✅ | |
+| Architecture changes touching multiple systems | ✅ | |
+| Quick typo fix or documentation update | | ✅ |
+| Routine refactor with full test coverage | | ✅ |
+| First-pass review before a teammate looks | | ✅ |
+
+<Tip>
+  Run Judgment Day before merging any feature that touches auth, data persistence, external APIs, or CI/CD configuration. The dual-blind protocol is specifically designed to catch the issues a single reviewer — human or AI — would rationalize away.
+</Tip>
+
+## Blocking Rules
+
+These constraints cannot be skipped under any circumstances:
+
+1. `JUDGMENT: APPROVED` cannot be declared until Round 1 judges return CLEAN, or Round 2 confirms 0 CRITICALs + 0 confirmed real WARNINGs.
+2. No `git push`, `git commit`, or code-modifying action after fixes until re-judgment completes.
+3. No session summary or "done" message until every active Judgment Day target is in APPROVED or ESCALATED state.
+4. After the Fix Agent returns, the immediate next action is re-launching both judges in parallel.

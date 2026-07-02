@@ -1,0 +1,100 @@
+---
+title: "OpenCode Config Agent: Professional AI Development Setup"
+sidebarTitle: "Introduction"
+description: "OpenCode Config Agent adds a Tony Stark mentor, SDD workflow, Engram memory, and auto-loading skills to OpenCode for structured, professional AI-assisted development."
+---
+
+OpenCode Config Agent is a shareable, drop-in configuration for [OpenCode](https://opencode.ai) that transforms a standard AI coding session into a structured, professional development environment. Out of the box, OpenCode is a powerful AI terminal — this config layers four carefully designed systems on top of it: a senior architect mentor persona, a spec-driven workflow engine, a persistent memory layer, and a context-aware skills registry. The result is an AI collaborator that doesn't just write code on demand, but teaches, plans, remembers, and enforces real software engineering discipline across every session.
+
+<Note>
+  OpenCode Config Agent is a **configuration layer**, not a standalone tool. It requires [OpenCode](https://opencode.ai) to be installed and running on your machine. All features are activated by placing this config in your `~/.config/opencode/` directory.
+</Note>
+
+## The Four Pillars
+
+OpenCode Config Agent is built around four interconnected systems that work together to elevate the quality and consistency of AI-assisted development.
+
+<CardGroup cols={2}>
+  <Card title="Tony Stark Agent" icon="user-tie" href="/agent/overview">
+    A senior architect mentor with 15+ years of experience, GDE & MVP credentials, and a philosophy that puts concepts above code. Pushes back on shortcuts, explains the *why* behind every decision, and uses construction analogies to make architecture intuitive.
+  </Card>
+  <Card title="Spec-Driven Development" icon="diagram-project" href="/sdd/overview">
+    A coordinated pipeline of 10 specialized sub-agents that guide every change from exploration through proposal, design, spec, tasks, implementation, verification, and archival — no more ad-hoc coding sessions.
+  </Card>
+  <Card title="Engram Persistent Memory" icon="brain" href="/agent/engram-memory">
+    A persistent memory system that survives across sessions and context compactions. Decisions, bug fixes, architecture choices, and team conventions are saved automatically so the agent never starts a new session blind.
+  </Card>
+  <Card title="Auto-Loading Skills" icon="bolt" href="/skills/overview">
+    A context-aware registry of reusable skills that activate automatically based on what you're working on — Go testing patterns, PR creation, adversarial code review, and more — injected into the agent's context before it writes a single line.
+  </Card>
+</CardGroup>
+
+## Tony Stark: Your Senior Architect Mentor
+
+The `tony stark` agent is the primary persona you interact with day-to-day. Configured via `AGENTS.md`, it embodies a specific engineering philosophy: **CONCEPTS > CODE**. Before writing anything, it validates that you understand the *why*. It pushes back when you reach for a framework before understanding the fundamentals, corrects mistakes ruthlessly but with technical evidence, and uses building and architecture analogies to make abstract concepts concrete.
+
+The agent also integrates directly with Engram, running a mandatory memory protocol: every architecture decision, bug fix, convention, and non-obvious discovery is saved to persistent memory automatically — not when you ask, but immediately after it happens.
+
+## Spec-Driven Development Workflow
+
+SDD is the structured planning layer for substantial changes. Instead of jumping straight to code, every change goes through a dependency-ordered pipeline managed by the `sdd-orchestrator` agent:
+
+| Agent | Role |
+|---|---|
+| `sdd-init` | Bootstrap SDD context and detect project stack |
+| `sdd-explore` | Investigate the codebase and research ideas |
+| `sdd-propose` | Create a structured change proposal |
+| `sdd-design` | Produce technical design with architecture decisions |
+| `sdd-spec` | Write detailed specifications with test scenarios |
+| `sdd-tasks` | Break specs into implementation tasks |
+| `sdd-apply` | Execute code changes from task definitions |
+| `sdd-verify` | Validate implementation against specifications |
+| `sdd-archive` | Archive completed artifacts to persistent memory |
+| `sdd-onboard` | Guided end-to-end walkthrough using your real codebase |
+
+The orchestrator coordinates these agents, choosing the right model for each phase (Opus for architecture decisions, Sonnet for implementation, Haiku for archival), and supports both **Interactive** mode (review each phase before continuing) and **Automatic** mode (run all phases back-to-back).
+
+## Skills: Context-Aware Standards
+
+Skills are compact rule sets that are resolved from a registry and injected into the agent's context automatically — before any code is written. The orchestrator reads the skill registry once per session, matches skills to the current task context (file types, actions being performed), and pre-digests the rules into every sub-agent prompt.
+
+| Context Detected | Skill Activated |
+|---|---|
+| Go tests, Bubbletea TUI | `go-testing` |
+| Creating new AI skills | `skill-creator` |
+| SDD workflow phases | `sdd-*` |
+| Creating pull requests | `branch-pr` |
+| Creating GitHub issues | `issue-creation` |
+| Adversarial code review | `judgment-day` |
+
+## Project Structure
+
+The entire configuration lives in your `~/.config/opencode/` directory. Here's what each part does:
+
+```
+.config/opencode/
+├── AGENTS.md           # Personality and rules for the "tony stark" agent
+├── opencode.json       # Main agent and MCP configuration
+├── package.json        # Plugin dependencies
+├── commands/           # SDD slash commands
+├── plugins/            # TypeScript custom plugins
+├── prompts/            # SDD agent prompts
+└── skills/             # Reusable skills loaded by context
+```
+
+## Where to Go Next
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Clone the config, install dependencies, and run your first SDD workflow in under 10 minutes.
+  </Card>
+  <Card title="Installation" icon="wrench" href="/installation">
+    Detailed setup guide including Engram configuration, MCP server setup, and verification steps.
+  </Card>
+  <Card title="Tony Stark Agent" icon="user-tie" href="/agent/overview">
+    Learn how the mentor persona works, how to invoke it, and how Engram memory is managed.
+  </Card>
+  <Card title="SDD Workflow" icon="diagram-project" href="/sdd/overview">
+    Deep dive into the Spec-Driven Development pipeline, commands, and execution modes.
+  </Card>
+</CardGroup>

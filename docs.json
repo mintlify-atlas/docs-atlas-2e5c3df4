@@ -1,72 +1,83 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mintlify Starter Kit",
+  "name": "OpenCode Config Agent",
+  "theme": "luma",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#5c5c5c",
+    "light": "#111010",
+    "dark": "#f3f3f3"
   },
-  "favicon": "/favicon.svg",
-  "navigation": {
-    "pages": [
-      {
-        "group": "Getting Started",
-        "pages": [
-          "index",
-          "quickstart"
-        ]
-      }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
+  "favicon": "https://media.brand.dev/db47b702-26f3-41a0-8a5e-f48b9f3523a3.jpg",
   "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
     "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://app.mintlify.com"
+      "type": "github",
+      "href": "https://github.com/lnardev/opencode-config-agent"
     }
-  },
-  "contextual": {
-    "options": [
-      "copy",
-      "view",
-      "chatgpt",
-      "claude",
-      "perplexity",
-      "mcp",
-      "cursor",
-      "vscode"
-    ]
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
+      "github": "https://github.com/lnardev/opencode-config-agent"
     }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Tony Stark Agent",
+            "pages": [
+              "agent/overview",
+              "agent/personality",
+              "agent/engram-memory"
+            ]
+          },
+          {
+            "group": "Spec-Driven Development",
+            "pages": [
+              "sdd/overview",
+              "sdd/workflow",
+              "sdd/commands",
+              "sdd/execution-modes"
+            ]
+          },
+          {
+            "group": "Skills",
+            "pages": [
+              "skills/overview",
+              "skills/branch-pr",
+              "skills/go-testing",
+              "skills/judgment-day",
+              "skills/skill-creator",
+              "skills/skill-registry"
+            ]
+          },
+          {
+            "group": "Plugins & MCP",
+            "pages": [
+              "plugins/background-agents",
+              "plugins/engram-plugin",
+              "plugins/mcp-servers"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/opencode-json",
+              "configuration/permissions",
+              "configuration/tui"
+            ]
+          }
+        ]
+      }
+    ]
   }
 }

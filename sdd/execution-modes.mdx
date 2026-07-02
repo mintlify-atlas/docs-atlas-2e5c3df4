@@ -1,0 +1,128 @@
+---
+title: "SDD Execution Modes and Artifact Storage Options"
+sidebarTitle: "Execution Modes"
+description: "Configure how SDD workflows run — Interactive vs Automatic execution, and choose between Engram, OpenSpec, or Hybrid artifact storage for your team."
+---
+
+When you invoke `/sdd-new`, `/sdd-ff`, or `/sdd-continue` for the first time in a session, the orchestrator asks you two configuration questions before running anything: which **execution mode** you want, and which **artifact storage** backend to use. Your answers are cached for the entire session — you won't be asked again unless you explicitly request a change.
+
+## Execution Modes
+
+The execution mode controls whether the orchestrator pauses between phases or runs everything back-to-back.
+
+| Mode | Behavior | Best For |
+|------|----------|----------|
+| **Interactive** (default) | Pauses after each phase, shows the result summary, asks "Continue?" before proceeding | Reviewing and steering each step; first-time use of SDD; high-stakes changes |
+| **Automatic** | Runs all phases back-to-back without pausing; shows the final result only | Speed and trust; familiar problem domains; iterating quickly |
+
+If you don't specify a mode, the orchestrator defaults to **Interactive** — it's the safer choice because it gives you control at every decision point.
+
+### Interactive Mode in Detail
+
+In Interactive mode, between every two phases the orchestrator:
+
+<Steps>
+  <Step title="Shows a concise summary">
+    Presents what the completed phase produced — key decisions, scope, or artifacts written.
+  </Step>
+  <Step title="Lists what the next phase will do">
+    Describes the next phase and what sub-agent will run, so you know what to expect.
+  </Step>
+  <Step title="Asks to continue">
+    Prompts: **"¿Continuamos? / Continue?"**
+
+    You can respond with:
+    - `YES` or `continue` → proceed to the next phase
+    - `NO` or `stop` → halt the pipeline; you can resume later with `/sdd-continue`
+    - Specific feedback → the orchestrator incorporates your feedback before launching the next phase
+  </Step>
+  <Step title="Incorporates feedback (if given)">
+    If you provided feedback, the orchestrator adjusts the next sub-agent's prompt to reflect your direction before delegating.
+  </Step>
+</Steps>
+
+### Automatic Mode in Detail
+
+In Automatic mode, all phases run via sub-agents back-to-back. The orchestrator delegates each phase as soon as the previous one completes, without pausing. You see only the final combined result. This is equivalent to running `/sdd-ff` for the planning phases, but extends all the way through apply, verify, and archive if you invoke `/sdd-continue` in automatic mode.
+
+<Tip>
+  Execution mode is cached for the session. If you want to switch mid-session, tell the orchestrator: "switch to automatic mode" or "switch to interactive mode."
+</Tip>
+
+## Artifact Storage Modes
+
+The artifact store determines where SDD artifacts (proposals, specs, designs, tasks, apply-progress, verify reports, archive reports) are persisted.
+
+| Mode | Description | Best For |
+|------|-------------|----------|
+| **engram** (default) | Fast, no files created. Artifacts stored in a local SQLite database via the engram MCP server. Cross-session. Re-running a phase overwrites the previous version — no history. | Solo work, quick iteration |
+| **openspec** | File-based. Creates an `openspec/` directory with a full artifact trail. Committable and shareable. Full git history of every artifact version. | Teams, PRs, audit trail |
+| **hybrid** | Both backends simultaneously — engram for cross-session recovery, files for team sharing. Higher token cost per operation (writes to two backends). | Cross-session recovery + team sharing |
+| **none** | Returns results inline only. No persistence. All artifacts lost when the conversation ends. Recommend enabling engram or openspec. | One-off exploration only |
+
+If you don't specify an artifact store, the orchestrator auto-detects: if engram is available (the MCP server is running), it defaults to `engram`. Otherwise, it defaults to `none` and explains the limitation.
+
+### Engram Mode Notes
+
+<Warning>
+  **No iteration history.** Re-running a phase (e.g., `/sdd-spec` a second time) overwrites the previous artifact. Only the latest version is retained in engram. If you need a full audit trail or want to compare iterations, use `openspec` or `hybrid` instead.
+
+  **Not shareable.** Engram is a local database — team members cannot see your SDD artifacts. For team projects, use `openspec` or `hybrid`.
+</Warning>
+
+### OpenSpec Directory Structure
+
+When using `openspec` or `hybrid` mode, `sdd-init` creates:
+
+```
+openspec/
+├── config.yaml          ← Project config: stack, conventions, strict_tdd, testing capabilities
+├── specs/               ← Source of truth; populated by sdd-archive when changes close
+└── changes/             ← Active changes
+    └── archive/         ← Completed changes (date-prefixed)
+```
+
+## Model Assignments
+
+The orchestrator reads a model assignment table at session start, caches it, and passes the appropriate model alias in every sub-agent delegation via the `model` parameter. This ensures each phase uses the right model for its cognitive load.
+
+| Phase | Default Model | Reason |
+|-------|---------------|--------|
+| orchestrator | opus | Coordinates, makes decisions |
+| sdd-explore | sonnet | Structural reading — not architectural |
+| sdd-propose | opus | Architectural decisions |
+| sdd-spec | sonnet | Structured writing |
+| sdd-design | opus | Architecture decisions |
+| sdd-tasks | sonnet | Mechanical breakdown |
+| sdd-apply | sonnet | Implementation |
+| sdd-verify | sonnet | Validation against spec |
+| sdd-archive | haiku | Copy and close |
+| default (non-SDD) | sonnet | General delegation |
+
+<Tip>
+  If the assigned model is not available in your current OpenCode session, the orchestrator automatically substitutes `sonnet` and continues without interrupting the workflow.
+</Tip>
+
+## Configuration Summary
+
+<CodeGroup>
+```text Interactive + Engram (default)
+When prompted:
+  Execution mode: interactive
+  Artifact store: engram
+```
+
+```text Automatic + OpenSpec (team setup)
+When prompted:
+  Execution mode: automatic
+  Artifact store: openspec
+```
+
+```text Interactive + Hybrid (full safety)
+When prompted:
+  Execution mode: interactive
+  Artifact store: hybrid
+```
+</CodeGroup>
+
+The mode choices you make at the start of a session apply to all SDD commands for the rest of that session. If you start a new OpenCode session, the orchestrator will ask again.

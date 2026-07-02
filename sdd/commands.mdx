@@ -1,0 +1,217 @@
+---
+title: "SDD Command Reference for OpenCode"
+sidebarTitle: "Commands"
+description: "Complete reference for all Spec-Driven Development slash commands — /sdd-new, /sdd-ff, /sdd-continue, /sdd-init, /sdd-explore, /sdd-apply, /sdd-verify, /sdd-archive, /sdd-onboard."
+---
+
+SDD provides two types of commands in OpenCode. **Skills** are defined as named sub-agents and appear in the OpenCode autocomplete menu when you type `/`. **Meta-commands** are handled directly by the `sdd-orchestrator` agent — you type them as plain messages and the orchestrator interprets them. Meta-commands never appear in autocomplete because they are not registered as individual skills; the orchestrator owns their logic entirely.
+
+## Skills (Autocomplete)
+
+Skills appear in the `/` autocomplete menu. Each one delegates to a dedicated sub-agent configured in `opencode.json`.
+
+<AccordionGroup>
+  <Accordion title="/sdd-init — Initialize SDD Context">
+    Detects the project tech stack, testing capabilities, and existing conventions. Bootstraps the active persistence backend (`openspec/` directory for file-based mode, or engram entries for memory mode). Writes `.atl/skill-registry.md` regardless of mode.
+
+    **Syntax:**
+    ```
+    /sdd-init
+    ```
+
+    **When to use:** At the start of any project before running other SDD commands. The orchestrator runs this automatically via the Init Guard if it hasn't been done, but you can also trigger it manually to refresh the project context.
+
+    **Produces:** Project context in engram (`sdd-init/{project}`), testing capabilities cache, and skill registry.
+  </Accordion>
+
+  <Accordion title="/sdd-explore — Explore Codebase for a Topic">
+    Investigates a topic or idea in your codebase. Reads widely, identifies affected areas, compares implementation approaches, and returns a structured analysis. Does **not** create or modify any project files.
+
+    **Syntax:**
+    ```
+    /sdd-explore <topic>
+    ```
+
+    **Examples:**
+    ```
+    /sdd-explore authentication refresh tokens
+    /sdd-explore migrating from REST to GraphQL
+    /sdd-explore payment provider abstraction layer
+    ```
+
+    **When to use:** Before starting a new change. Running explore first gives the proposal phase richer codebase context, resulting in more accurate proposals and fewer surprises during implementation.
+
+    **Produces:** Exploration artifact at `sdd/{topic}/explore` in the active artifact store.
+  </Accordion>
+
+  <Accordion title="/sdd-apply — Implement Tasks">
+    Executes the implementation tasks defined by the tasks phase. Reads spec, design, and tasks artifacts, then writes code following the project's conventions. Checks off tasks as they are completed. When Strict TDD Mode is active, follows RED → GREEN → REFACTOR for each task.
+
+    **Syntax:**
+    ```
+    /sdd-apply [change]
+    ```
+
+    **When to use:** After `sdd-tasks` has produced a task list for the change. Can be run in multiple batches — each batch reads the existing apply-progress and merges new progress without overwriting.
+
+    **Produces:** Apply-progress artifact at `sdd/{change}/apply-progress`. Updates task completion status in the tasks artifact.
+  </Accordion>
+
+  <Accordion title="/sdd-verify — Validate Implementation">
+    Validates the completed implementation against the specifications. Runs tests and build, then compares actual behavior against every spec scenario. Produces a structured report with findings at three severity levels.
+
+    **Syntax:**
+    ```
+    /sdd-verify [change]
+    ```
+
+    **Severity levels:**
+    - `CRITICAL` — spec scenario not met; blocks archive
+    - `WARNING` — implementation deviates from design decisions
+    - `SUGGESTION` — improvement opportunities, non-blocking
+
+    **When to use:** After `sdd-apply` has completed all tasks. Must pass before archiving.
+
+    **Produces:** Verify report at `sdd/{change}/verify-report`.
+  </Accordion>
+
+  <Accordion title="/sdd-archive — Archive and Close">
+    Closes a completed change. Reads all artifacts to confirm the change is ready, syncs delta specs into the main specs directory, records all artifact observation IDs for traceability, and marks the change as complete.
+
+    **Syntax:**
+    ```
+    /sdd-archive [change]
+    ```
+
+    **When to use:** After `sdd-verify` passes. This is the final step of the SDD pipeline.
+
+    **Produces:** Archive report at `sdd/{change}/archive-report`. Syncs `openspec/specs/` if using file-based storage.
+  </Accordion>
+
+  <Accordion title="/sdd-onboard — Guided End-to-End Walkthrough">
+    Walks you through a complete SDD cycle using your **actual** codebase — not a toy example. Guides you through exploration, proposal, spec, design, tasks, apply, verify, and archive, teaching by doing. Saves onboarding progress as it goes so you can resume if interrupted.
+
+    **Syntax:**
+    ```
+    /sdd-onboard
+    ```
+
+    **When to use:** When you are new to SDD and want a hands-on introduction using a real change in your project.
+
+    **Produces:** Onboarding progress at `sdd-onboard/{project}` and all standard SDD artifacts for the change you work through.
+  </Accordion>
+</AccordionGroup>
+
+## Meta-Commands (Type Directly)
+
+Meta-commands are handled by the `sdd-orchestrator` agent itself. Type them directly in the chat — they will not appear in autocomplete.
+
+<AccordionGroup>
+  <Accordion title="/sdd-new — Start a New Change">
+    Starts a new SDD change. The orchestrator delegates exploration first (to investigate the codebase), presents the exploration summary, then delegates proposal creation. After both complete, it asks whether you want to continue with specs and design.
+
+    **Syntax:**
+    ```
+    /sdd-new <change-name>
+    ```
+
+    **Examples:**
+    ```
+    /sdd-new add-oauth-login
+    /sdd-new migrate-to-postgres
+    /sdd-new payment-provider-abstraction
+    ```
+
+    **What happens internally:**
+    1. Init Guard runs (silently initializes SDD if not done)
+    2. Orchestrator asks execution mode and artifact store (first time in session)
+    3. Delegates to `sdd-explore` → presents summary
+    4. Delegates to `sdd-propose` → presents proposal summary
+    5. Asks whether to continue to specs and design
+
+    **Produces:** Exploration and proposal artifacts for the named change.
+  </Accordion>
+
+  <Accordion title="/sdd-continue — Continue to Next Phase">
+    Continues the active change by running the next dependency-ready phase. The orchestrator checks which artifacts already exist, determines what phase is next in the dependency graph, and delegates to the appropriate sub-agent(s).
+
+    **Syntax:**
+    ```
+    /sdd-continue [change]
+    ```
+
+    **Dependency resolution order:**
+    ```
+    proposal → [spec ∥ design] → tasks → apply → verify → archive
+    ```
+
+    **When to use:** After any phase completes and you want to proceed. If spec and design are both ready but tasks haven't run, `/sdd-continue` will delegate `sdd-tasks`. If both spec and design are missing, it can run them in parallel.
+
+    **Produces:** Whatever the next phase in the pipeline produces.
+  </Accordion>
+
+  <Accordion title="/sdd-ff — Fast-Forward All Planning Phases">
+    Fast-forwards through all planning phases in sequence: proposal → spec → design → tasks. Runs all four sub-agents back-to-back and presents a combined summary at the end (not between each phase).
+
+    **Syntax:**
+    ```
+    /sdd-ff <change-name>
+    ```
+
+    **Examples:**
+    ```
+    /sdd-ff add-rate-limiting
+    /sdd-ff refactor-auth-module
+    ```
+
+    **What happens internally:**
+    1. Delegates to `sdd-propose`
+    2. Delegates to `sdd-spec`
+    3. Delegates to `sdd-design`
+    4. Delegates to `sdd-tasks`
+    5. Presents combined summary of all four phases
+
+    **When to use:** When you want to go from idea to ready-to-implement task list in one shot, without reviewing intermediate artifacts. Best used when you trust the AI's judgment on the planning phases or when iterating quickly on a familiar problem domain.
+
+    **Produces:** Proposal, spec, design, and tasks artifacts for the named change.
+  </Accordion>
+</AccordionGroup>
+
+## Full Command Reference
+
+| Command | Type | Description |
+|---------|------|-------------|
+| `/sdd-init` | Skill | Bootstrap SDD context — detect stack and testing capabilities |
+| `/sdd-explore <topic>` | Skill | Explore codebase for a topic; no files created |
+| `/sdd-apply [change]` | Skill | Implement tasks; checks off items as it goes |
+| `/sdd-verify [change]` | Skill | Validate implementation against specs |
+| `/sdd-archive [change]` | Skill | Archive and close a completed change |
+| `/sdd-onboard` | Skill | Guided end-to-end walkthrough using your real codebase |
+| `/sdd-new <change>` | Meta | Start a new change — explore + propose |
+| `/sdd-continue [change]` | Meta | Continue to the next dependency-ready phase |
+| `/sdd-ff <change>` | Meta | Fast-forward: proposal → spec → design → tasks |
+
+<Note>
+  Meta-commands (`/sdd-new`, `/sdd-continue`, `/sdd-ff`) are handled by the `sdd-orchestrator` agent directly and will not appear in the OpenCode autocomplete menu. Skills are registered as individual agents in `opencode.json` and do appear in autocomplete.
+</Note>
+
+## Additional Commands
+
+The `commands/` directory also includes two non-SDD review commands:
+
+<CardGroup cols={2}>
+  <Card title="/pr-review" icon="code-pull-request">
+    Performs a SonarQube-style review of a Bitbucket Cloud pull request. Pass the full PR URL as the argument. Analyzes only the changed lines for bugs, vulnerabilities, security hotspots, and code smells. Requires `BITBUCKET_TOKEN` and `BITBUCKET_USER` environment variables.
+
+    ```
+    /pr-review https://bitbucket.org/workspace/repo/pull-requests/123
+    ```
+  </Card>
+  <Card title="/sonar-review" icon="magnifying-glass">
+    Performs a SonarQube-style review of **uncommitted** code in the working tree. Analyzes staged, unstaged, and untracked files. Reports bugs, vulnerabilities, security hotspots, and code smells — with file and line citations. Ends with a clear "ready to commit?" verdict.
+
+    ```
+    /sonar-review
+    ```
+  </Card>
+</CardGroup>

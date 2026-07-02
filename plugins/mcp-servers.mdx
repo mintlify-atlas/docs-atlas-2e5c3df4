@@ -1,0 +1,212 @@
+---
+title: "MCP Servers: context7, Engram, and Chrome DevTools"
+sidebarTitle: "MCP Servers"
+description: "OpenCode Config Agent configures three MCP servers — context7 for live library docs, Engram for persistent memory tools, and Chrome DevTools for browser integration."
+---
+
+OpenCode Config Agent ships with three MCP (Model Context Protocol) servers pre-configured in `opencode.json`. Together they give agents real-time documentation lookups, persistent cross-session memory, and direct browser access — without any additional setup beyond having the right binaries installed.
+
+## Overview
+
+| Server | Type | Purpose |
+|---|---|---|
+| `context7` | Remote | Up-to-date library documentation |
+| `engram` | Local | Persistent memory MCP tools (`mem_*`) |
+| `chrome-devtools` | Local | Chrome browser integration |
+
+<Note>
+  MCP servers run as separate processes. `type: "local"` servers are spawned by OpenCode on startup. `type: "remote"` servers connect over HTTP — no local process is required.
+</Note>
+
+---
+
+## context7
+
+context7 is a remote MCP server that provides real-time, version-accurate documentation for npm packages, Python libraries, and other open-source projects. Agents call context7 tools to look up current API signatures, options, and examples before writing code — eliminating hallucinated or outdated API usage.
+
+```json
+"context7": {
+  "enabled": true,
+  "type": "remote",
+  "url": "https://mcp.context7.com/mcp"
+}
+```
+
+<CardGroup cols={2}>
+  <Card title="No setup required" icon="circle-check">
+    context7 is a public remote MCP server. No binary, no credentials, no local process. OpenCode connects to it over HTTPS automatically.
+  </Card>
+  <Card title="Enabled by default" icon="toggle-on">
+    The `"enabled": true` flag means context7 is active as soon as OpenCode starts. You can disable it by setting `"enabled": false`.
+  </Card>
+</CardGroup>
+
+**When agents use it:** Anytime they need to look up the current API for a library before writing code — for example, checking the exact signature of a Next.js `unstable_cache` option or verifying a Prisma query method.
+
+---
+
+## Engram
+
+The `engram` MCP entry exposes the full suite of `mem_*` memory tools to agents. It works alongside the [Engram plugin](/plugins/engram-plugin) — the plugin handles automatic HTTP server startup and event capture, while this MCP entry gives agents the tool interface for explicitly saving and searching memories.
+
+```json
+"engram": {
+  "command": [
+    "/opt/homebrew/bin/engram",
+    "mcp",
+    "--tools=agent"
+  ],
+  "type": "local"
+}
+```
+
+The `--tools=agent` flag tells the engram binary to expose the agent-facing tool set (as opposed to the full admin tool set).
+
+### Installation
+
+<Tabs>
+  <Tab title="macOS (Homebrew)">
+    ```bash
+    brew install lnardev/tap/engram
+    ```
+    
+    After installation, the binary will be at `/opt/homebrew/bin/engram` — matching the default path in `opencode.json`.
+  </Tab>
+  <Tab title="Custom path">
+    If you install engram to a different location, update the `command` in `opencode.json`:
+
+    ```json
+    "engram": {
+      "command": [
+        "/usr/local/bin/engram",
+        "mcp",
+        "--tools=agent"
+      ],
+      "type": "local"
+    }
+    ```
+
+    You can also set the `ENGRAM_BIN` environment variable for the [Engram plugin](/plugins/engram-plugin) to match.
+  </Tab>
+</Tabs>
+
+### How the Plugin and MCP Entry Relate
+
+The Engram plugin (`engram.ts`) and the `engram` MCP server entry are two separate integration points for the same binary:
+
+| Integration | What it does |
+|---|---|
+| **Engram plugin** (`engram.ts`) | Auto-starts `engram serve` (HTTP), captures events passively, injects memory instructions into system prompt |
+| **Engram MCP entry** | Spawns `engram mcp` (stdio MCP server), exposes `mem_*` tools agents can call explicitly |
+
+Both must be present for the full memory system to work.
+
+---
+
+## Chrome DevTools
+
+The `chrome-devtools` MCP server connects OpenCode to a running Chrome browser instance, enabling agents to inspect the DOM, monitor network requests, read console output, and interact with web pages during development.
+
+```json
+"chrome-devtools": {
+  "command": [
+    "npx",
+    "-y",
+    "chrome-devtools-mcp@latest"
+  ],
+  "type": "local"
+}
+```
+
+<CardGroup cols={2}>
+  <Card title="No installation needed" icon="circle-check">
+    Uses `npx -y` to download and run the latest version on demand. OpenCode handles the process lifecycle automatically.
+  </Card>
+  <Card title="Requires Chrome running" icon="chrome">
+    You must have a Chrome browser instance running with remote debugging enabled for the MCP server to connect.
+  </Card>
+</CardGroup>
+
+**Start Chrome with remote debugging:**
+
+```bash
+# macOS
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --remote-debugging-port=9222
+
+# Linux
+google-chrome --remote-debugging-port=9222
+```
+
+---
+
+## Adding Custom MCP Servers
+
+To add your own MCP server, add an entry to the `mcp` object in `opencode.json`. OpenCode supports both local (stdio) and remote (HTTP/SSE) servers.
+
+<Tabs>
+  <Tab title="Local (stdio)">
+    ```json
+    "mcp": {
+      "my-custom-server": {
+        "type": "local",
+        "command": [
+          "node",
+          "/path/to/my-mcp-server/index.js"
+        ],
+        "env": {
+          "MY_API_KEY": "your-key-here"
+        }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Remote (HTTP)">
+    ```json
+    "mcp": {
+      "my-remote-server": {
+        "type": "remote",
+        "url": "https://mcp.example.com/mcp",
+        "enabled": true,
+        "headers": {
+          "Authorization": "Bearer your-token-here"
+        }
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Tip>
+  Use `"enabled": false` to temporarily disable an MCP server without removing its configuration. This is useful for servers you only need in certain projects.
+</Tip>
+
+## Full MCP Configuration
+
+Here is the complete MCP section from `opencode.json` for reference:
+
+```json
+"mcp": {
+  "chrome-devtools": {
+    "command": [
+      "npx",
+      "-y",
+      "chrome-devtools-mcp@latest"
+    ],
+    "type": "local"
+  },
+  "context7": {
+    "enabled": true,
+    "type": "remote",
+    "url": "https://mcp.context7.com/mcp"
+  },
+  "engram": {
+    "command": [
+      "/opt/homebrew/bin/engram",
+      "mcp",
+      "--tools=agent"
+    ],
+    "type": "local"
+  }
+}
+```

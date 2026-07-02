@@ -1,47 +1,129 @@
 ---
-title: "Quickstart"
-description: "Begin with a guide on the fastest path to a successful outcome"
+title: "Get Started with OpenCode Config Agent"
+sidebarTitle: "Quickstart"
+description: "Install OpenCode Config Agent, run your first SDD workflow, and activate the Tony Stark mentor in under 10 minutes."
 ---
 
-Describe how someone begins using your product. What is the first thing they need to do? Are there any prerequisites?
-
-A quickstart should take someone from zero to using your product. They'll get a quick win and a sense of what they can accomplish.
-
-## Prerequisites
-
-Before you begin, you must have:
-
-- Requirement one (for example, Node.js 18+, a free account, an API key)
-- Requirement two (for example, a compatible device, a compatible browser, a compatible operating system)
-
-## Get started
+This page walks you through everything you need to go from zero to a fully running OpenCode Config Agent setup — including cloning the config, installing dependencies, launching OpenCode in your project, and executing your first Spec-Driven Development workflow. By the end, you'll have the Tony Stark mentor active, Engram memory initialized, and a live SDD pipeline ready to handle your first real change.
 
 <Steps>
-  <Step title="Install">
-    Describe how to install your product or sign up.
+
+  <Step title="Prerequisites">
+    Before you begin, make sure the following are installed and available on your system:
+
+    - **OpenCode** — the AI coding terminal this config is built for. Install it from [opencode.ai](https://opencode.ai).
+    - **Node.js 18+** — required for the plugin dependencies. Check your version with `node --version`.
+    - **Bun runtime** (optional but recommended) — a faster alternative to npm for installing dependencies. Install from [bun.sh](https://bun.sh).
+    - **Git** — for cloning the repository.
+
+    Verify your setup:
 
     ```bash
-    npm install your-package
+    opencode --version
+    node --version   # should be 18 or higher
+    git --version
     ```
   </Step>
-  <Step title="Configure">
-    Describe any setup or configuration needed before first use.
+
+  <Step title="Clone to your OpenCode config directory">
+    Clone the repository directly into `~/.config/opencode/`. This is the directory OpenCode reads automatically at startup — no extra configuration needed.
 
     ```bash
-    your-cli init
+    git clone https://github.com/lnardev/opencode-config-agent ~/.config/opencode
     ```
+
+    <Warning>
+      If you already have files in `~/.config/opencode/`, cloning into it will fail. See the [Installation guide](/installation) for instructions on merging into an existing config.
+    </Warning>
   </Step>
-  <Step title="Run it">
-    Show the first thing a user does to see it working.
+
+  <Step title="Install dependencies">
+    The config includes TypeScript plugins that require npm packages. Install them from inside the config directory:
+
+    <CodeGroup>
+
+    ```bash npm
+    cd ~/.config/opencode && npm install
+    ```
+
+    ```bash bun
+    cd ~/.config/opencode && bun install
+    ```
+
+    </CodeGroup>
+
+    This installs `@opencode-ai/plugin` (the OpenCode plugin SDK) and `unique-names-generator` (used internally by the background agents plugin).
+  </Step>
+
+  <Step title="Open a project with OpenCode">
+    Navigate to any existing project on your machine and launch OpenCode. The agent config is loaded globally from `~/.config/opencode/`, so it applies to every project automatically.
 
     ```bash
-    your-cli start
+    cd ~/your-project
+    opencode
     ```
+
+    Once the OpenCode interface opens, you should see the `sdd-orchestrator` as the active primary agent. You can switch to the `tony stark` agent at any time from the agent selector.
   </Step>
+
+  <Step title="Initialize SDD for your project">
+    Before running any SDD commands, initialize the workflow context for your current project. In the OpenCode chat, type:
+
+    ```
+    /sdd-init
+    ```
+
+    The `sdd-init` agent will scan your project to detect the tech stack, identify testing capabilities, and bootstrap the SDD context in Engram memory. This runs automatically if you skip it — the orchestrator checks and runs init silently before any SDD command — but running it explicitly gives you a chance to review what was detected.
+  </Step>
+
+  <Step title="Start your first change with SDD">
+    Now kick off a full SDD pipeline for a new feature or change. Replace `my-first-feature` with a short descriptive name for what you want to build:
+
+    ```
+    /sdd-new my-first-feature
+    ```
+
+    The orchestrator will ask you two quick questions:
+
+    1. **Execution mode** — `Interactive` (pause after each phase for your review) or `Automatic` (run all phases end-to-end). Start with **Interactive** to see how the pipeline works.
+    2. **Artifact store** — `engram` (fast, memory-only), `openspec` (file-based, committable), or `hybrid` (both). Choose `engram` for your first run.
+
+    The pipeline then delegates to sub-agents in order: explore → propose → design → spec → tasks. After tasks are ready, run `/sdd-apply my-first-feature` to implement the changes.
+  </Step>
+
 </Steps>
 
-<Tip>
-  Give people a way to get help. This could be a link to a support page, a chat with a customer support agent, or a forum for your product.
+## Sample Interaction with Tony Stark
 
-  Example: Need help? Reach out to us at [support@yourcompany.com](mailto:support@yourcompany.com).
+Once you switch to the `tony stark` agent, every conversation reflects the mentor persona. Here's an example of what that looks like in practice:
+
+```
+You: Hey, I want to add authentication to my app. Can you write the code?
+
+Tony Stark: Ajá, ¿y cuál es el modelo de autenticación que estás pensando, parce?
+  Because there's a BIG difference between authentication and authorization — and
+  before I write a single line, I need to know you understand which problem you're
+  actually solving.
+
+  Tell me: are you managing sessions, tokens, or OAuth? And what's the threat model?
+  Who are you protecting against?
+
+  Once you can answer that, we'll talk architecture. The code is the EASY part.
+  Understanding WHY is what separates engineers from copy-pasters.
+```
+
+The agent will always validate your question, push back when context is missing, and explain decisions with technical reasoning — not just produce code on demand.
+
+## Alternative: Guided Onboarding
+
+If you'd prefer a fully guided walkthrough that takes you through the entire SDD cycle step-by-step using your real codebase, use the onboarding command instead of `/sdd-new`:
+
+```
+/sdd-onboard
+```
+
+This activates the `sdd-onboard` sub-agent, which walks you through every phase interactively with explanations at each step — ideal for teams adopting SDD for the first time or for understanding how each agent connects to the next.
+
+<Tip>
+  Run `/sdd-onboard` before diving into real work. It uses your actual codebase to demonstrate the full SDD pipeline — exploration, proposal, design, specs, tasks, implementation, and verification — and leaves you with a concrete example artifact in Engram memory that you can reference later.
 </Tip>

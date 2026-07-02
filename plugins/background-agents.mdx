@@ -1,0 +1,236 @@
+---
+title: "Background Agents Plugin: Async Sub-Agent Delegation"
+sidebarTitle: "Background Agents"
+description: "The BackgroundAgents plugin replaces OpenCode's native task tool with persistent async delegation — launch sub-agents in parallel, get notified on completion, retrieve results from disk."
+---
+
+The `BackgroundAgents` plugin supercharges OpenCode's multi-agent capabilities by replacing the native `task` tool with a fully asynchronous, disk-persisted delegation system. Instead of blocking your orchestrator while a sub-agent works, you fire off one or more delegations and continue with other productive work. When every sub-agent finishes, a `[TASK NOTIFICATION]` message arrives automatically — no polling required. Because results are written to disk rather than kept in memory, they survive context compaction and can always be retrieved by ID, even in a fresh session.
+
+## Key Differences vs. Native Task Tool
+
+| Feature | `delegate` (BackgroundAgents) | `task` (native) |
+|---|---|---|
+| Execution | Async, background | Synchronous, blocking |
+| Results | Persisted to disk | In-memory only |
+| Survives compaction | ✅ Yes | ❌ No |
+| Multiple concurrent | ✅ Yes | Limited |
+
+## Three Tools Provided
+
+The plugin registers three tools into every OpenCode session.
+
+<CardGroup cols={3}>
+  <Card title="delegate" icon="rocket">
+    Launch a background task. Returns immediately with a human-readable ID like `swift-amber-falcon`. The orchestrator can continue working while the sub-agent runs.
+  </Card>
+  <Card title="delegation_read" icon="book-open">
+    Retrieve a completed result by its ID. If the delegation is still running, this call blocks until it finishes or times out.
+  </Card>
+  <Card title="delegation_list" icon="list">
+    List all delegations — both running and completed — for the current session. Results are sourced from memory and from the on-disk store.
+  </Card>
+</CardGroup>
+
+### Tool Signatures
+
+```typescript
+// Launch a background task — returns immediately
+delegate(prompt: string, agent: string): string
+// → "Delegation started: swift-amber-falcon\nAgent: sdd-explore\nYou WILL be notified when complete. Do NOT poll."
+
+// Retrieve the full result by ID (blocks if still running)
+delegation_read(id: string): string
+// → Full markdown output from the sub-agent
+
+// List all delegations for this session
+delegation_list(): string
+// → "## Delegations\n- **swift-amber-falcon** | Auth module analysis [complete]\n  → Discovered JWT refresh logic in src/auth/..."
+```
+
+## How It Works
+
+<Steps>
+  <Step title="delegate() creates an isolated OpenCode session">
+    When you call `delegate(prompt, agent)`, the plugin creates a brand-new OpenCode session via `client.session.create()`, scoped under the parent session as `parentID`. This gives the sub-agent a clean context with no inherited conversation history.
+  </Step>
+  <Step title="Returns immediately with a human-readable ID">
+    Before the sub-agent takes its first step, `delegate()` returns an adjective-color-animal ID (e.g., `swift-amber-falcon`). The orchestrator is free to launch more delegations, read files, or think — the sub-agent is already running in the background.
+  </Step>
+  <Step title="Sub-agent runs; progress is tracked">
+    The sub-agent session runs normally. OpenCode's `message.updated` events are captured by the plugin to track progress — last message timestamp, tool call count — without blocking anything.
+  </Step>
+  <Step title="session.idle event signals completion">
+    When the sub-agent's session goes idle (`session.idle` event), the plugin extracts the final assistant message, assembles the result text, and transitions the delegation status to `complete`.
+  </Step>
+  <Step title="small_model generates a title and description">
+    If `small_model` is configured in your OpenCode config, a lightweight session is created to generate a short title (≤30 chars) and description (≤150 chars) for the result. If no `small_model` is configured, the plugin falls back to truncating the first line.
+  </Step>
+  <Step title="Result persisted to disk">
+    The full result is written as a Markdown file to:
+    ```
+    ~/.local/share/opencode/delegations/{projectId}/{delegationId}.md
+    ```
+    The project ID is derived from the git root commit hash, so it's consistent across worktrees.
+  </Step>
+  <Step title="Parent session receives a compact [TASK NOTIFICATION]">
+    The plugin injects a short notification into the parent session — just the ID and status. The full result stays on disk to avoid inflating the parent's context:
+    ```
+    [TASK NOTIFICATION]
+    ID: swift-amber-falcon
+    Status: complete
+    Use delegation_read(id) to retrieve the full result.
+    ```
+  </Step>
+  <Step title="When ALL delegations complete, a final response is triggered">
+    Individual notifications are sent with `noReply: true` (no LLM response triggered). Only when the last pending delegation for a parent session completes does the plugin send a final `[TASK NOTIFICATION] All delegations complete.` message with `noReply: false`, waking the orchestrator to process all results.
+  </Step>
+</Steps>
+
+## ID Format
+
+Delegation IDs are generated using the [`unique-names-generator`](https://www.npmjs.com/package/unique-names-generator) library with three dictionaries: **adjectives**, **colors**, and **animals**.
+
+```typescript
+uniqueNamesGenerator({
+  dictionaries: [adjectives, colors, animals],
+  separator: "-",
+  length: 3,
+  style: "lowerCase",
+})
+// → "swift-amber-falcon", "eager-blue-tiger", "quiet-crimson-fox"
+```
+
+IDs are checked for collisions against in-memory delegations (up to 10 regeneration attempts).
+
+## Storage Location
+
+```
+~/.local/share/opencode/delegations/
+└── {projectId}/                   ← git root commit hash (16 hex chars)
+    ├── swift-amber-falcon.md
+    ├── eager-blue-tiger.md
+    └── background-agents-debug.log
+```
+
+Each `.md` file contains a metadata header followed by the full sub-agent output:
+
+```markdown
+# Auth Module Analysis
+
+Discovered JWT refresh logic and token rotation patterns.
+
+**ID:** swift-amber-falcon
+**Agent:** sdd-explore
+**Status:** complete
+**Started:** 2025-01-15T10:23:41.000Z
+**Completed:** 2025-01-15T10:26:12.000Z
+
+---
+
+[Full sub-agent output here...]
+```
+
+## Timeout Behavior
+
+<Note>
+  The maximum run time for any delegation is **15 minutes (900 seconds)**. A timer is set at launch with a small 5-second buffer.
+</Note>
+
+When a delegation times out:
+
+1. Status is set to `timeout`
+2. The sub-agent's session is cancelled via `client.session.delete()`
+3. Any partial result produced so far is retrieved and saved to disk with a `[TIMEOUT REACHED]` marker
+4. The parent session receives a normal `[TASK NOTIFICATION]` with status `timeout`
+
+## Delegation Statuses
+
+| Status | Meaning |
+|---|---|
+| `running` | Sub-agent session is active |
+| `complete` | Session went idle; result extracted and persisted |
+| `error` | Session prompt threw an exception |
+| `cancelled` | Manually deleted or cancelled |
+| `timeout` | Exceeded the 15-minute limit |
+
+## Compaction Support
+
+When OpenCode compacts a session's context, the `experimental.session.compacting` hook fires. The plugin injects a `<delegation-context>` block into the compacted summary so the new agent knows exactly which delegations are in flight:
+
+```
+<delegation-context>
+## Running Delegations
+
+### `swift-amber-falcon` (sdd-explore)
+**Started:** 2025-01-15T10:23:41.000Z
+**Prompt:** Explore the authentication module and document...
+
+> **Note:** You WILL be notified via a **Task Notification** blockquote when delegations complete.
+> Do NOT poll `delegation_list` - continue productive work.
+
+## Recent Completed Delegations
+
+- `eager-blue-tiger` [complete]
+
+> Use `delegation_read(id)` to get full output for any completed delegation.
+
+## Retrieval
+Use `delegation_read("id")` to access full delegation output.
+</delegation-context>
+```
+
+Only sessions whose running delegations belong to the current session tree receive this injection — it's filtered by `parentSessionID` and root session ID.
+
+## Anti-Recursion Guard
+
+Sub-agent sessions created by `delegate()` have the following tools explicitly disabled to prevent infinite delegation loops:
+
+```typescript
+tools: {
+  task: false,
+  delegate: false,
+  todowrite: false,
+  plan_save: false,
+}
+```
+
+This is enforced at the `session.prompt()` call level — it cannot be overridden by the sub-agent's system prompt or agent configuration.
+
+## Usage Example
+
+```typescript
+// Orchestrator launches two parallel sub-agents
+delegate("Explore the authentication module and document all token handling patterns...", "sdd-explore")
+delegate("Research Redis caching patterns for session storage in Node.js...", "sdd-explore")
+// Both run in the background — orchestrator continues working
+
+// ... orchestrator does other work ...
+
+// [TASK NOTIFICATION]
+// ID: swift-amber-falcon
+// Status: complete
+// Use delegation_read(id) to retrieve the full result.
+
+// [TASK NOTIFICATION]
+// ID: eager-blue-tiger
+// Status: complete
+// Use delegation_read(id) to retrieve the full result.
+
+// [TASK NOTIFICATION] All delegations complete.
+
+// Orchestrator retrieves both results
+delegation_read("swift-amber-falcon")
+delegation_read("eager-blue-tiger")
+```
+
+## System Prompt Injection
+
+The plugin injects `DELEGATION_RULES` into every session's system prompt via the `experimental.chat.system.transform` hook. This block explains when to use `delegate` vs `task`, the notification contract, and critical constraints — so agents always know the rules even after compaction resets context.
+
+<Warning>
+  Changes made by write-capable agents in background sessions are **NOT tracked** by OpenCode's undo/branching system. Background delegations run in isolated sessions that live outside OpenCode's session tree. This is an accepted tradeoff for the ability to run sub-agents in parallel.
+</Warning>
+
+<Warning>
+  **Never poll `delegation_list` to check completion.** You will be notified automatically via `[TASK NOTIFICATION]` when delegations finish. Polling wastes tokens and defeats the purpose of async delegation.
+</Warning>

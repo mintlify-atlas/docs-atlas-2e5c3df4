@@ -1,0 +1,87 @@
+---
+title: "Spec-Driven Development: Structured AI Change Workflow"
+sidebarTitle: "Overview"
+description: "Spec-Driven Development (SDD) is a 9-phase workflow for making structured code changes using coordinated AI sub-agents in OpenCode — from exploration to archive."
+---
+
+Spec-Driven Development (SDD) is a structured workflow for making substantial code changes with AI assistance. Rather than asking an AI to "just write the feature," SDD enforces a deliberate pipeline: explore the codebase, propose the change, design the architecture, write detailed specifications, break down tasks, implement, verify, and archive. This prevents the most common failure mode of AI-assisted coding — writing code without understanding the system — by requiring every change to pass through documented, reviewable phases before a single line is written.
+
+SDD is built directly into OpenCode as a set of coordinated sub-agents, each responsible for exactly one phase. A central `sdd-orchestrator` agent manages the pipeline, delegating all real work to the appropriate sub-agent while maintaining a thin context thread across the session.
+
+## The 9 Phases
+
+| Agent | Phase | Description |
+|-------|-------|-------------|
+| `sdd-init` | Initialize | Bootstrap SDD context, detect stack, testing capabilities, and conventions |
+| `sdd-explore` | Explore | Investigate codebase, research ideas, compare approaches — no files created |
+| `sdd-propose` | Propose | Create a structured change proposal with scope, risks, and rollback plan |
+| `sdd-design` | Design | Technical design with architecture decisions, sequence diagrams, and rationale |
+| `sdd-spec` | Spec | Detailed specifications using Given/When/Then scenarios and RFC 2119 keywords |
+| `sdd-tasks` | Tasks | Break down specs into hierarchical, session-sized implementation tasks |
+| `sdd-apply` | Apply | Execute code changes from task definitions, with TDD cycle when enabled |
+| `sdd-verify` | Verify | Validate implementation against specs; reports CRITICAL / WARNING / SUGGESTION |
+| `sdd-archive` | Archive | Archive all artifacts, sync delta specs, and close the change |
+
+## Dependency Graph
+
+Each phase builds on the artifacts produced by previous phases. Spec and Design can run in parallel once the Proposal exists; Tasks require both before proceeding.
+
+```
+proposal ──► spec ──────► tasks ──► apply ──► verify ──► archive
+               ▲            ▲
+               │            │
+             design ────────┘
+```
+
+<Note>
+  `sdd-explore` is optional but recommended. Running it before `/sdd-new` gives the proposal phase richer context about the existing codebase.
+</Note>
+
+## Artifact Storage
+
+SDD artifacts (proposals, specs, designs, tasks, apply progress, verify reports) are stored in one of three backends. The orchestrator asks which mode you prefer at the start of each session.
+
+| Mode | Description | Best For |
+|------|-------------|----------|
+| **engram** (default) | Fast, no files created. Artifacts live in a local SQLite database. Cross-session via MCP. Re-running a phase overwrites the previous version. | Solo work, quick iteration |
+| **openspec** | File-based. Creates an `openspec/` directory with a full artifact trail that is committable and shareable. | Teams, PRs, audit trail |
+| **hybrid** | Both backends — files for team sharing, engram for cross-session recovery. Higher token cost per operation. | Cross-session recovery + team sharing |
+| **none** | Returns results inline only. No persistence. All artifacts lost when the conversation ends. | One-off exploration |
+
+## The Orchestrator Role
+
+The `sdd-orchestrator` is the primary agent you interact with. Its role is strictly that of a **coordinator** — it maintains the session state, decides which sub-agent to launch next, passes the right artifact references into each delegation, and synthesizes results for you to review. It never does phase work inline.
+
+This design keeps the orchestrator's context small and precise. Real work (reading large codebases, writing code, running tests) is always delegated to a dedicated sub-agent with a fresh context window.
+
+### Delegation Decision Table
+
+The orchestrator uses this table to decide whether to act inline or delegate:
+
+| Action | Inline | Delegate |
+|--------|--------|----------|
+| Read 1–3 files to decide or verify | ✅ | — |
+| Read 4+ files to explore or understand | — | ✅ |
+| Read as preparation for writing | — | ✅ (together with the write) |
+| Write atomic (one file, already know what to write) | ✅ | — |
+| Write with analysis (multiple files, new logic) | — | ✅ |
+| Bash for state (git, gh) | ✅ | — |
+| Bash for execution (test, build, install) | — | ✅ |
+
+<Warning>
+  The orchestrator **never** reads 4+ files to understand the codebase inline, writes features across multiple files inline, or runs tests and builds inline. These always inflate context without benefit and are always delegated.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Workflow" icon="diagram-project" href="/sdd/workflow">
+    Phase-by-phase breakdown of what each sub-agent reads, writes, and produces
+  </Card>
+  <Card title="Commands" icon="terminal" href="/sdd/commands">
+    Full reference for all SDD slash commands — skills and meta-commands
+  </Card>
+  <Card title="Execution Modes" icon="sliders" href="/sdd/execution-modes">
+    Configure interactive vs. automatic execution and artifact storage options
+  </Card>
+</CardGroup>

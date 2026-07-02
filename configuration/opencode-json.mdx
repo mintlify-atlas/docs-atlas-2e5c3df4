@@ -1,0 +1,261 @@
+---
+title: "opencode.json: Agent and MCP Configuration Reference"
+sidebarTitle: "opencode.json"
+description: "Complete reference for opencode.json — configure agents, MCP servers, permissions, and plugins for OpenCode Config Agent's Tony Stark and SDD orchestrator setup."
+---
+
+The `opencode.json` file is the central configuration for OpenCode Config Agent. It lives at `~/.config/opencode/opencode.json` and controls everything about how agents behave: which agents exist, what prompts they use, what tools they can invoke, which MCP servers are connected, what filesystem and shell permissions are enforced, and which plugins are loaded.
+
+## Top-level structure
+
+The file is a single JSON object with four top-level keys:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": { ... },
+  "mcp": { ... },
+  "permission": { ... },
+  "plugin": [ ... ]
+}
+```
+
+<ParamField path="$schema" type="string">
+  Points to the OpenCode JSON schema for editor validation and autocompletion.
+</ParamField>
+
+<ParamField path="agent" type="object">
+  A map of agent names to agent configuration objects. Each key becomes the agent's identifier used in the agent picker and for delegation.
+</ParamField>
+
+<ParamField path="mcp" type="object">
+  A map of MCP server names to connection configurations. See the [MCP field](#mcp-field) section below and the MCP Servers reference for full details.
+</ParamField>
+
+<ParamField path="permission" type="object">
+  Global permission rules controlling bash command execution and file read access. See the [Permissions](/configuration/permissions) reference for full details.
+</ParamField>
+
+<ParamField path="plugin" type="array">
+  An array of npm package names to load as OpenCode plugins.
+</ParamField>
+
+---
+
+## agent field
+
+Each entry under `agent` defines one agent available in OpenCode. Agents are addressed by their key name (e.g. `"tony stark"`, `"sdd-orchestrator"`).
+
+### Agent object fields
+
+<ParamField path="description" type="string" required>
+  A short human-readable description shown in the agent picker when selecting which agent to use.
+</ParamField>
+
+<ParamField path="hidden" type="boolean">
+  When `true`, the agent is hidden from the autocomplete picker and agent selection UI. Use this for subagents that are only meant to be called programmatically by orchestrators. Defaults to `false`.
+</ParamField>
+
+<ParamField path="mode" type='"primary" | "subagent"' required>
+  Controls how the agent can be invoked.
+  - **`primary`** — can be selected directly by the user from the agent picker or invoked in conversation.
+  - **`subagent`** — intended only for delegation from another agent. Cannot be invoked directly by the user in normal flow.
+</ParamField>
+
+<ParamField path="prompt" type="string" required>
+  The system prompt for the agent. Can be either inline text or a `{file:path}` reference. See [Prompt reference syntax](#prompt-reference-syntax) below.
+</ParamField>
+
+<ParamField path="tools" type="object" required>
+  A map of tool names to booleans. Set a tool to `true` to enable it for this agent, `false` to disable. Common tools: `bash`, `read`, `write`, `edit`, `delegate`, `delegation_list`, `delegation_read`.
+</ParamField>
+
+<ParamField path="permission" type="object">
+  Per-agent permission overrides that layer on top of the global `permission` block. Useful for restricting what a specific agent can delegate to. See [Per-agent permissions](/configuration/permissions#per-agent-permissions).
+</ParamField>
+
+### Agents in this configuration
+
+OpenCode Config Agent ships with two primary agents and ten hidden subagents:
+
+| Agent | Mode | Hidden | Description |
+|---|---|---|---|
+| `tony stark` | `primary` | `false` | Senior Architect mentor — helpful first, challenging when it matters |
+| `sdd-orchestrator` | `primary` | `false` | Agent Teams Orchestrator — coordinates sub-agents, never does work inline |
+| `sdd-init` | `subagent` | `true` | Bootstrap SDD context and project configuration |
+| `sdd-explore` | `subagent` | `true` | Investigate codebase and think through ideas |
+| `sdd-propose` | `subagent` | `true` | Create change proposals from explorations |
+| `sdd-design` | `subagent` | `true` | Create technical design from proposals |
+| `sdd-spec` | `subagent` | `true` | Write detailed specifications from proposals |
+| `sdd-tasks` | `subagent` | `true` | Break down specs and designs into implementation tasks |
+| `sdd-apply` | `subagent` | `true` | Implement code changes from task definitions |
+| `sdd-verify` | `subagent` | `true` | Validate implementation against specs |
+| `sdd-archive` | `subagent` | `true` | Archive completed change artifacts |
+| `sdd-onboard` | `subagent` | `true` | Guide user through a complete SDD cycle using their real codebase |
+
+<Note>
+  The two primary agents — `tony stark` and `sdd-orchestrator` — are the entry points you interact with directly. All `sdd-*` subagents are invoked automatically by the orchestrator as it progresses through the SDD workflow phases.
+</Note>
+
+#### tony stark
+
+Tony Stark is a senior architect mentor persona. Its prompt is loaded from `./AGENTS.md` (relative to the opencode.json location), making it easy to customize the mentor's personality and focus areas by editing that file.
+
+```json
+"tony stark": {
+  "description": "Senior Architect mentor - helpful first, challenging when it matters",
+  "mode": "primary",
+  "prompt": "{file:./AGENTS.md}",
+  "tools": {
+    "edit": true,
+    "write": true
+  }
+}
+```
+
+#### sdd-orchestrator
+
+The SDD orchestrator is a coordinator agent. It holds the SDD workflow logic inline in its `prompt` field and delegates all real work to the `sdd-*` subagents. It has the full delegation toolset enabled and a `permission` override that restricts it to only delegating to agents matching `sdd-*`.
+
+```json
+"sdd-orchestrator": {
+  "description": "Agent Teams Orchestrator - coordinates sub-agents, never does work inline",
+  "mode": "primary",
+  "permission": {
+    "task": {
+      "*": "deny",
+      "sdd-*": "allow"
+    }
+  },
+  "prompt": "...",
+  "tools": {
+    "bash": true,
+    "delegate": true,
+    "delegation_list": true,
+    "delegation_read": true,
+    "edit": true,
+    "read": true,
+    "write": true
+  }
+}
+```
+
+<Warning>
+  Do **not** edit the `sdd-orchestrator`'s inline `prompt` field directly in your local copy — it is managed by this repository and may be overwritten on updates. To extend orchestrator behavior with project-specific standards, use the skills system instead.
+</Warning>
+
+---
+
+## Prompt reference syntax
+
+Agent prompts support a `{file:path}` syntax that loads prompt content from an external file at runtime. This keeps large prompt files out of the JSON and allows you to edit them in your preferred editor.
+
+```json
+"prompt": "{file:./AGENTS.md}"
+```
+
+```json
+"prompt": "{file:/Users/you/.config/opencode/prompts/sdd/sdd-apply.md}"
+```
+
+<ParamField path="{file:./relative/path}" type="string">
+  A path relative to the **directory containing `opencode.json`**. For a config at `~/.config/opencode/opencode.json`, `./AGENTS.md` resolves to `~/.config/opencode/AGENTS.md`.
+</ParamField>
+
+<ParamField path="{file:/absolute/path}" type="string">
+  An absolute path anywhere on the filesystem. The SDD subagents use absolute paths pointing to their individual prompt files under `~/.config/opencode/prompts/sdd/`.
+</ParamField>
+
+<Tip>
+  Use relative paths for prompts you want to keep co-located with your config (like `tony stark`'s `AGENTS.md`). Use absolute paths for prompts that live in a dedicated prompts library and are shared across multiple configs.
+</Tip>
+
+---
+
+## mcp field
+
+The `mcp` block registers Model Context Protocol servers that agents can call as tools. Each key is the server's name as it appears in tool calls.
+
+```json
+"mcp": {
+  "context7": {
+    "enabled": true,
+    "type": "remote",
+    "url": "https://mcp.context7.com/mcp"
+  },
+  "engram": {
+    "command": ["/opt/homebrew/bin/engram", "mcp", "--tools=agent"],
+    "type": "local"
+  },
+  "chrome-devtools": {
+    "command": ["npx", "-y", "chrome-devtools-mcp@latest"],
+    "type": "local"
+  }
+}
+```
+
+<ParamField path="type" type='"remote" | "local"' required>
+  - **`remote`** — connects to an MCP server over HTTP/SSE at the given `url`.
+  - **`local`** — spawns a local process via `command` and communicates over stdio.
+</ParamField>
+
+<ParamField path="url" type="string">
+  Required when `type` is `"remote"`. The HTTP endpoint of the MCP server.
+</ParamField>
+
+<ParamField path="command" type="string[]">
+  Required when `type` is `"local"`. The command and arguments to spawn the MCP server process.
+</ParamField>
+
+<ParamField path="enabled" type="boolean">
+  When `false`, the server is registered but not started. Defaults to `true`.
+</ParamField>
+
+The three MCP servers bundled in this config are:
+
+<CardGroup cols={3}>
+  <Card title="context7" icon="book-open">
+    Remote MCP server providing up-to-date library documentation. Used by agents when they need current API references.
+  </Card>
+  <Card title="engram" icon="database">
+    Local persistent memory server. Used by the SDD orchestrator and subagents to store and retrieve artifacts across sessions.
+  </Card>
+  <Card title="chrome-devtools" icon="chrome">
+    Local MCP server bridging the Chrome DevTools Protocol. Useful for frontend debugging workflows.
+  </Card>
+</CardGroup>
+
+---
+
+## plugin field
+
+Plugins extend OpenCode's core functionality. They are loaded from `node_modules` in the config directory.
+
+```json
+"plugin": ["opencode-anthropic-login-via-cli@latest"]
+```
+
+This configuration includes one plugin:
+
+<Card title="opencode-anthropic-login-via-cli" icon="key">
+  Enables authentication with Anthropic via the CLI, so you can log in to your Anthropic account directly from the terminal rather than managing API keys manually.
+</Card>
+
+### Installing plugins
+
+After adding a plugin to the `plugin` array, you must install it:
+
+```bash
+cd ~/.config/opencode
+npm install
+```
+
+The `package.json` in the config directory tracks plugin versions. To pin a specific version, replace `@latest` with the version tag:
+
+```json
+"plugin": ["opencode-anthropic-login-via-cli@1.2.3"]
+```
+
+<Note>
+  TUI plugins (like `opencode-subagent-statusline`) are configured separately in `tui.json` — they do **not** go in the `plugin` array in `opencode.json`. See the [TUI configuration](/configuration/tui) reference.
+</Note>

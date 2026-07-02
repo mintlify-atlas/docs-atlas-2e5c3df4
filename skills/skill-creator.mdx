@@ -1,0 +1,196 @@
+---
+title: "Skill Creator: Build Custom Auto-Loading Skills"
+sidebarTitle: "Skill Creator"
+description: "The skill-creator skill guides you through creating new SKILL.md files with correct frontmatter, compact rules, and trigger conditions for OpenCode Config Agent."
+---
+
+The `skill-creator` skill activates whenever you ask the agent to create a new AI skill, add agent instructions, or document patterns for AI consumption. It enforces the correct `SKILL.md` structure — including required frontmatter fields, the Trigger keyword that makes auto-loading work, and the compact rules format the skill-registry needs to generate its summaries. Without this skill, it's easy to create a SKILL.md that is technically valid but never fires because the trigger is missing or ambiguous.
+
+## Trigger
+
+This skill loads automatically when:
+- Creating a new AI skill or agent instruction set
+- Writing a `SKILL.md` file
+- Documenting reusable patterns for AI consumption
+
+## When to Create a Skill
+
+**Create a skill when:**
+- A pattern is used repeatedly and AI needs guidance
+- Project-specific conventions differ from generic best practices
+- Complex workflows need step-by-step instructions
+- Decision trees help the agent choose the right approach
+
+**Don't create a skill when:**
+- Documentation already exists — create a reference instead
+- The pattern is trivial or self-explanatory
+- It's a one-off task that won't recur
+
+## SKILL.md Structure
+
+Every skill is a directory with at minimum a `SKILL.md` file. Optional subdirectories hold templates and local doc references.
+
+```
+skills/{skill-name}/
+├── SKILL.md              # Required — main skill file
+├── assets/               # Optional — templates, schemas, config examples
+│   ├── template.py
+│   └── schema.json
+└── references/           # Optional — links to LOCAL docs (no web URLs)
+    └── docs.md
+```
+
+### Required Frontmatter Fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Skill identifier — lowercase, hyphens only |
+| `description` | Yes | What the skill does + `Trigger:` keyword line |
+| `license` | Yes | Always `Apache-2.0` |
+| `metadata.author` | Yes | `gentleman-programming` |
+| `metadata.version` | Yes | Semantic version as a quoted string, e.g. `"1.0"` |
+
+<Warning>
+  The `description` field must include a `Trigger:` line. This is how the skill-registry and skill-resolver know when to inject the skill. A SKILL.md without a clear trigger will never auto-load.
+</Warning>
+
+### Content Sections
+
+After frontmatter, a SKILL.md should include these sections in order:
+
+1. **When to Use** — bullet list of scenarios where this skill applies
+2. **Critical Patterns** / **Critical Rules** — the most important rules; what the AI MUST know
+3. **Code Examples** — minimal, focused examples only
+4. **Commands** — copy-paste bash commands relevant to the skill
+5. **Resources** — links to `assets/` templates or `references/` local docs
+
+## Compact Rules Requirements
+
+When the skill-registry scans your `SKILL.md`, it generates a compact rules block (5–15 lines) to inject into sub-agent prompts. To ensure that block is accurate and useful, the **Critical Patterns / Critical Rules section** must contain only:
+
+<CardGroup cols={2}>
+  <Card title="✅ Include" icon="circle-check">
+    - Actionable rules: "do X", "never Y", "prefer Z over W"
+    - Key patterns with a one-line example where essential
+    - Breaking changes or gotchas that cause bugs if missed
+  </Card>
+  <Card title="❌ Exclude" icon="circle-xmark">
+    - Purpose or motivation (why the rule exists)
+    - Full code examples or installation steps
+    - Anything the sub-agent doesn't need to *apply* the skill
+  </Card>
+</CardGroup>
+
+## SKILL.md Template
+
+```markdown
+---
+name: {skill-name}
+description: >
+  {One-line description of what this skill does}.
+  Trigger: {When the AI should load this skill — use keywords that match user intent}.
+license: Apache-2.0
+metadata:
+  author: gentleman-programming
+  version: "1.0"
+---
+
+## When to Use
+
+- {Scenario 1}
+- {Scenario 2}
+- {Scenario 3}
+
+---
+
+## Critical Patterns
+
+### Pattern 1: {Pattern Name}
+
+{One-sentence description of the rule}
+
+~~~go
+// Minimal code example — keep under 20 lines
+~~~
+
+### Pattern 2: {Pattern Name}
+
+- Rule A: {actionable constraint}
+- Rule B: {actionable constraint}
+- Never do: {anti-pattern}
+
+---
+
+## Commands
+
+```bash
+{copy-paste command 1}
+{copy-paste command 2}
+```
+
+---
+
+## Resources
+
+- **Templates**: Place reusable templates in an `assets/` subdirectory next to `SKILL.md`
+- **Documentation**: Place local doc references in a `references/` subdirectory next to `SKILL.md`
+```
+
+## Naming Conventions
+
+| Type | Pattern | Examples |
+|------|---------|----------|
+| Generic technology skill | `{technology}` | `pytest`, `playwright`, `typescript` |
+| Project-specific component | `{project}-{component}` | `myapp-api`, `myapp-ui` |
+| Testing skill | `{project}-test-{component}` | `myapp-test-sdk`, `myapp-test-api` |
+| Workflow skill | `{action}-{target}` | `skill-creator`, `jira-task`, `branch-pr` |
+
+## Where to Place Skills
+
+<Tabs>
+  <Tab title="Global (all projects)">
+    Install at the user level to make the skill available across every project:
+
+    ```
+    ~/.config/opencode/skills/{skill-name}/SKILL.md
+    ```
+
+    Also recognized in:
+    - `~/.claude/skills/{skill-name}/SKILL.md`
+    - `~/.gemini/skills/{skill-name}/SKILL.md`
+    - `~/.cursor/skills/{skill-name}/SKILL.md`
+  </Tab>
+  <Tab title="Project-level (overrides global)">
+    Install at the project level to override a global skill or add a project-specific skill:
+
+    ```
+    {project}/.agent/skills/{skill-name}/SKILL.md
+    ```
+
+    Also recognized in:
+    - `{project}/.claude/skills/{skill-name}/SKILL.md`
+    - `{project}/.gemini/skills/{skill-name}/SKILL.md`
+    - `{project}/skills/{skill-name}/SKILL.md`
+  </Tab>
+</Tabs>
+
+When both a global and project-level skill share the same name, the project-level version always wins.
+
+## Checklist Before Creating
+
+Before writing a new skill, confirm:
+
+- [ ] The skill doesn't already exist — check `skills/` in the config directory
+- [ ] The pattern is reusable across multiple sessions, not a one-off task
+- [ ] The name follows the naming conventions above
+- [ ] Frontmatter is complete — especially the `Trigger:` line in `description`
+- [ ] Critical patterns are clear, actionable, and free of motivation/explanation
+- [ ] Code examples are minimal (under 20 lines each)
+- [ ] A `Commands` section exists with copy-paste commands
+- [ ] The skill has been added to `AGENTS.md`
+
+## After Creating a Skill
+
+<Note>
+  After writing a new `SKILL.md`, run the skill registry to rebuild the index so the orchestrator picks it up in the next session. Say **"update skills"**, **"skill registry"**, **"actualizar skills"**, or **"update registry"** in chat, or run `/sdd-init` if starting a new project setup. Without this step, the new skill will not auto-load.
+</Note>

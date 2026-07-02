@@ -1,20 +1,72 @@
 ---
-title: "Introduction"
-description: "Welcome to your project"
+title: "OpenCode Config Agent: AI-Powered Development Configuration"
+sidebarTitle: "Home"
+description: "A shareable OpenCode configuration with the Tony Stark mentor agent, Spec-Driven Development workflow, persistent memory, and auto-loading skills."
 ---
 
-Write a short description of your product here. What it does, who it's for, and what they can accomplish with it.
+OpenCode Config Agent is a batteries-included configuration for [OpenCode](https://opencode.ai) that transforms your AI coding assistant into a structured, memory-aware development partner. It ships a senior architect persona ("Tony Stark"), a 9-phase Spec-Driven Development (SDD) workflow orchestrated by sub-agents, persistent cross-session memory via Engram, and a library of reusable skills that activate automatically based on context.
 
-<Tip>
-  Ready to make this your own? Start by editing this page. Update your `docs.json` file to customize your site. Then fill out the [Quickstart](/quickstart) page.
-</Tip>
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get the configuration installed and your first SDD workflow running in minutes.
+  </Card>
+  <Card title="Tony Stark Agent" icon="user-tie" href="/agent/overview">
+    Meet the Senior Architect persona — philosophy, behavior, and how to work with it.
+  </Card>
+  <Card title="Spec-Driven Development" icon="diagram-project" href="/sdd/overview">
+    Learn the 9-phase SDD pipeline: explore → propose → spec → design → tasks → apply → verify → archive.
+  </Card>
+  <Card title="Skills" icon="wand-magic-sparkles" href="/skills/overview">
+    Auto-loading skills for PR creation, Go testing, adversarial review, and more.
+  </Card>
+  <Card title="Plugins & MCP" icon="puzzle-piece" href="/plugins/background-agents">
+    Background Agents plugin for async delegation and Engram for persistent memory.
+  </Card>
+  <Card title="Configuration" icon="gear" href="/configuration/opencode-json">
+    Full reference for opencode.json agents, permissions, and TUI settings.
+  </Card>
+</CardGroup>
 
-<Card title="Quickstart" icon="rocket" href="/quickstart">
-  This card links to the quickstart page in your project.
-</Card>
-<Card title="Components" icon="puzzle-piece" href="https://mintlify.com/docs/components">
-  Add cards, callouts, steps, tabs, and more to design and structure your pages.
-</Card>
-<Card title="Settings" icon="gear" href="https://mintlify.com/docs/organize/settings">
-  Set your site name, branding, and navigation in the `docs.json` file.
-</Card>
+## What's included
+
+<CardGroup cols={3}>
+  <Card title="Tony Stark Agent" icon="brain">
+    Senior Architect persona with 15+ years of simulated experience. Teaches concepts over code, corrects mistakes with evidence, and pushes back on shortcuts.
+  </Card>
+  <Card title="SDD Orchestrator" icon="sitemap">
+    A primary agent that coordinates the full SDD pipeline by delegating to specialized sub-agents — it never does work inline.
+  </Card>
+  <Card title="Engram Memory" icon="database">
+    Cross-session persistent memory backed by a local SQLite store. Decisions, discoveries, and session summaries survive compaction and restarts.
+  </Card>
+  <Card title="Background Agents" icon="arrows-spin">
+    Async parallel sub-agent delegation. Launch multiple agents simultaneously; results are persisted to disk and survive context compaction.
+  </Card>
+  <Card title="Auto-Loading Skills" icon="bolt">
+    Skills activate automatically by context: Go testing, PR creation, adversarial review, and more — injected before any code is written.
+  </Card>
+  <Card title="MCP Integrations" icon="plug">
+    Three MCP servers: context7 for live library docs, Engram for memory, and Chrome DevTools for browser integration.
+  </Card>
+</CardGroup>
+
+## How it works
+
+<Steps>
+  <Step title="Install the configuration">
+    Clone the repo into your OpenCode config directory (`~/.config/opencode/`) and install the npm dependencies.
+  </Step>
+  <Step title="Choose your agent">
+    Start a session with `tony stark` for mentored development or `sdd-orchestrator` for structured change workflows.
+  </Step>
+  <Step title="Initialize SDD in your project">
+    Run `/sdd-init` in any project to detect the stack, bootstrap persistence, and enable Strict TDD mode if supported.
+  </Step>
+  <Step title="Drive changes with /sdd-new">
+    Use `/sdd-new <change-name>` to kick off the full pipeline. The orchestrator delegates exploration, proposal, specs, design, tasks, and implementation to specialized sub-agents automatically.
+  </Step>
+</Steps>
+
+<Note>
+  This configuration is designed to be placed at `~/.config/opencode/` and works with any OpenCode-compatible project. See the [Installation guide](/installation) for full setup instructions.
+</Note>

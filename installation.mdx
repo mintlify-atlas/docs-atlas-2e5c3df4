@@ -1,0 +1,213 @@
+---
+title: "Install and Configure OpenCode Config Agent"
+sidebarTitle: "Installation"
+description: "Step-by-step guide to installing OpenCode Config Agent, configuring Engram memory, setting up MCP servers, and verifying your setup."
+---
+
+Installing OpenCode Config Agent means placing a set of configuration files — agents, prompts, skills, plugins, and MCP server definitions — into the directory that OpenCode reads at startup (`~/.config/opencode/`). Installation covers cloning the repo, installing plugin dependencies, optionally setting up the Engram binary for persistent memory, and verifying that all agents and MCP servers load correctly. This guide covers both a fresh install and merging into an existing OpenCode config.
+
+## Prerequisites
+
+The following tools must be available before you install:
+
+| Tool | Requirement | Notes |
+|---|---|---|
+| [OpenCode](https://opencode.ai) | Required | The AI terminal this config runs inside |
+| Node.js | 18+ | For installing plugin dependencies via npm |
+| Bun | Optional (recommended) | Faster alternative to npm — [bun.sh](https://bun.sh) |
+| Git | Required | For cloning and pulling updates |
+| Engram binary | Optional | Required for persistent memory across sessions — see [MCP Server Setup](#mcp-server-setup) below |
+
+## Installation Methods
+
+<Tabs>
+  <Tab title="Fresh Install">
+    If you don't have anything in `~/.config/opencode/` yet, clone directly into that directory:
+
+    ```bash
+    git clone https://github.com/lnardev/opencode-config-agent ~/.config/opencode
+    ```
+
+    Then install dependencies:
+
+    ```bash
+    cd ~/.config/opencode && npm install
+    ```
+
+    That's it. The next time you run `opencode` in any project, the agents and MCP servers will be loaded automatically.
+  </Tab>
+  <Tab title="Existing Config">
+    If you already have files in `~/.config/opencode/` (custom settings, existing `opencode.json`, etc.), don't clone directly — you'll need to merge manually to avoid overwriting your existing setup.
+
+    **1. Clone to a temporary location:**
+
+    ```bash
+    git clone https://github.com/lnardev/opencode-config-agent /tmp/opencode-config-agent
+    ```
+
+    **2. Copy the new files into your config directory:**
+
+    ```bash
+    cp -r /tmp/opencode-config-agent/commands ~/.config/opencode/
+    cp -r /tmp/opencode-config-agent/plugins ~/.config/opencode/
+    cp -r /tmp/opencode-config-agent/prompts ~/.config/opencode/
+    cp -r /tmp/opencode-config-agent/skills ~/.config/opencode/
+    cp /tmp/opencode-config-agent/AGENTS.md ~/.config/opencode/
+    ```
+
+    **3. Merge `opencode.json`** manually. Copy the `agent` and `mcp` blocks from the cloned config into your existing `opencode.json`. Be careful not to overwrite custom agents or MCP servers you've already configured.
+
+    **4. Install dependencies:**
+
+    ```bash
+    cd ~/.config/opencode && npm install
+    ```
+
+    <Warning>
+      Do NOT blindly overwrite your existing `opencode.json`. It may contain custom API keys, model preferences, or agent configurations you want to keep. Always merge by hand or diff the two files first.
+    </Warning>
+  </Tab>
+</Tabs>
+
+## Install Plugin Dependencies
+
+The `plugins/` directory contains TypeScript plugins that depend on npm packages. Install them from the config directory:
+
+<CodeGroup>
+
+```bash npm
+cd ~/.config/opencode
+npm install
+```
+
+```bash bun
+cd ~/.config/opencode
+bun install
+```
+
+```bash pnpm
+cd ~/.config/opencode
+pnpm install
+```
+
+</CodeGroup>
+
+This installs the two required packages declared in `package.json`:
+
+```json
+{
+  "dependencies": {
+    "@opencode-ai/plugin": "1.4.6",
+    "unique-names-generator": "^4.7.1"
+  }
+}
+```
+
+## Verify Installation
+
+Once dependencies are installed, open OpenCode inside any project and confirm the agents loaded correctly:
+
+```bash
+cd ~/your-project
+opencode
+```
+
+In the OpenCode chat, type:
+
+```
+/sdd-onboard
+```
+
+If the `sdd-onboard` agent responds with a guided walkthrough prompt, your installation is working. If you see an error or an unrecognized command, check that:
+
+1. The `prompts/` directory was copied correctly and contains the SDD prompt files
+2. The `opencode.json` has the `agent` block with all SDD agents defined
+3. Plugin dependencies were installed successfully (`node_modules/` exists in `~/.config/opencode/`)
+
+## MCP Server Setup
+
+OpenCode Config Agent ships with three MCP servers pre-configured in `opencode.json`. Their setup requirements vary:
+
+### context7 — Remote, No Setup Required
+
+`context7` is a remote MCP server that provides up-to-date library documentation. It's already configured with its URL and requires no local installation:
+
+```json
+"context7": {
+  "enabled": true,
+  "type": "remote",
+  "url": "https://mcp.context7.com/mcp"
+}
+```
+
+It will connect automatically when OpenCode starts.
+
+### Engram — Requires Local Binary
+
+`engram` is the persistent memory MCP server. It runs as a local process and requires the `engram` binary to be installed and available on your `PATH`.
+
+**Install on macOS via Homebrew:**
+
+```bash
+brew install engram
+```
+
+The config expects the binary at `/opt/homebrew/bin/engram` (the default Homebrew location on Apple Silicon). If your Homebrew prefix is different, update the path in `opencode.json`:
+
+```json
+"engram": {
+  "command": [
+    "/opt/homebrew/bin/engram",
+    "mcp",
+    "--tools=agent"
+  ],
+  "type": "local"
+}
+```
+
+To find your engram binary path after installation:
+
+```bash
+which engram
+```
+
+Replace `/opt/homebrew/bin/engram` in `opencode.json` with the output of that command.
+
+<Note>
+  Engram is optional but strongly recommended. Without it, the Tony Stark agent's mandatory memory protocol has nowhere to persist data, and the SDD orchestrator defaults to `none` artifact store mode — returning results inline only, with no cross-session recovery.
+</Note>
+
+### chrome-devtools — Runs via npx, No Setup Required
+
+The `chrome-devtools` MCP server runs on-demand via `npx` and requires no global installation:
+
+```json
+"chrome-devtools": {
+  "command": ["npx", "-y", "chrome-devtools-mcp@latest"],
+  "type": "local"
+}
+```
+
+It will be downloaded and executed automatically the first time it's invoked.
+
+## Updating
+
+To pull the latest changes and refresh your dependencies:
+
+```bash
+cd ~/.config/opencode
+git pull
+npm install
+```
+
+If you're using Bun:
+
+```bash
+cd ~/.config/opencode
+git pull
+bun install
+```
+
+<Warning>
+  If you've added custom API keys, personal tokens, or private credentials directly to `opencode.json` (for example, in the `mcp` headers section), make sure those values are not committed to version control. Add `opencode.json` to your `.gitignore` or use environment variables instead. Committing credentials to a public or shared repository is a security risk.
+</Warning>
