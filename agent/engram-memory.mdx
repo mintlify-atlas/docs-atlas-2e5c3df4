@@ -1,5 +1,5 @@
 ---
-title: "Engram Persistent Memory Protocol for OpenCode"
+title: "Engram Persistent Memory: OpenCode Agent Memory Protocol"
 sidebarTitle: "Engram Memory"
 description: "Learn how Engram gives OpenCode agents cross-session persistent memory — when to save, when to search, session close protocol, and compaction recovery."
 ---
@@ -10,7 +10,7 @@ Engram is a persistent memory system that gives OpenCode agents a durable record
 
 The Engram plugin (`plugins/engram.ts`) sits between OpenCode's event system and a local `engram` Go binary that manages an SQLite-backed observation store. The plugin auto-starts the binary on session open if it is not already running.
 
-```
+```text
 OpenCode events
       │
       ▼
@@ -152,7 +152,7 @@ When a session's context window fills up, OpenCode triggers a compaction event. 
 1. Fetches recent session context from Engram and injects it into the compaction output — so the new agent starts with persistent memory, not just the compressed transcript
 2. Appends a `CRITICAL INSTRUCTION` into the compaction prompt that tells the compressor to include the following instruction at the top of the compacted summary:
 
-```
+```text
 FIRST ACTION REQUIRED: Call mem_session_summary with the content of this compacted
 summary. Use project: '{project}'. This preserves what was accomplished before
 compaction. Do this BEFORE any other work.

@@ -1,7 +1,7 @@
 ---
-title: "Auto-Loading Skills for OpenCode Config Agent"
+title: "Skills Overview: Auto-Loading for OpenCode Config Agent"
 sidebarTitle: "Overview"
-description: "Skills are reusable rule sets that inject into sub-agent prompts automatically based on code context and task type — ensuring consistent patterns without manual activation."
+description: "Reusable rule sets the orchestrator injects into sub-agent prompts by context, keeping every parallel agent consistent with project standards."
 ---
 
 Skills are modular rule sets — each one a `SKILL.md` file — that the OpenCode Config Agent detects and injects automatically into every sub-agent prompt based on what code is being touched and what action is being performed. Unlike static prompts you invoke manually, skills are context-driven: the orchestrator matches them against the current task and inserts their compact rules before any work begins. You never need to remember to "load" a skill — the registry takes care of that on your behalf.
@@ -14,7 +14,7 @@ This build-once / read-cheaply design keeps token costs low (50–150 tokens per
 
 ## Skill Resolver Protocol
 
-Before launching any sub-agent that reads, writes, or reviews code, the orchestrator runs a three-step injection process:
+Before launching any sub-agent that reads, writes, or reviews code, the orchestrator runs a four-step injection process:
 
 <Steps>
   <Step title="Obtain the Skill Registry">
@@ -28,18 +28,26 @@ Before launching any sub-agent that reads, writes, or reviews code, the orchestr
     The `Trigger` field in each skill's frontmatter is the source of truth for matching.
   </Step>
   <Step title="Inject Compact Rules">
-    The orchestrator copies the matching compact rules blocks from the registry's **Compact Rules** section into the sub-agent prompt **before** any task-specific instructions, under the header `## Project Standards (auto-resolved)`. Project convention file paths are appended as references when relevant.
+    The orchestrator copies the matching compact rules blocks from the registry's **Compact Rules** section into the sub-agent prompt **before** any task-specific instructions, under the header `## Project Standards (auto-resolved)`.
+  </Step>
+  <Step title="Include Project Conventions">
+    If the registry has a **Project Conventions** section and the sub-agent will work on project code, the convention file paths and their notes are appended to the prompt — so the sub-agent can read project-specific rules without extra discovery hops.
   </Step>
 </Steps>
 
 ## Auto-Load Triggers
 
-The following table shows which skill fires for each detected context. Multiple skills can match and inject simultaneously.
+`AGENTS.md` defines exactly two hard auto-load entries — the agent is instructed to load these **immediately** upon detecting the matching context, before writing any code:
 
 | Context | Skill |
 |---------|-------|
-| Go tests, Bubbletea TUI | `go-testing` |
+| Go tests, Bubbletea TUI testing | `go-testing` |
 | Creating new AI skills | `skill-creator` |
+
+The remaining skills are context-triggered by the agent as needed and are documented in the README. Multiple skills can match and inject simultaneously.
+
+| Context | Skill |
+|---------|-------|
 | SDD workflow steps | `sdd-*` |
 | Creating pull requests | `branch-pr` |
 | Creating GitHub issues | `issue-creation` |

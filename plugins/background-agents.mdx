@@ -1,7 +1,7 @@
 ---
 title: "Background Agents Plugin: Async Sub-Agent Delegation"
 sidebarTitle: "Background Agents"
-description: "The BackgroundAgents plugin replaces OpenCode's native task tool with persistent async delegation — launch sub-agents in parallel, get notified on completion, retrieve results from disk."
+description: "Async sub-agent delegation for OpenCode: fire parallel tasks, get notified on completion, and read disk-persisted results by ID. Survives compaction."
 ---
 
 The `BackgroundAgents` plugin supercharges OpenCode's multi-agent capabilities by replacing the native `task` tool with a fully asynchronous, disk-persisted delegation system. Instead of blocking your orchestrator while a sub-agent works, you fire off one or more delegations and continue with other productive work. When every sub-agent finishes, a `[TASK NOTIFICATION]` message arrives automatically — no polling required. Because results are written to disk rather than kept in memory, they survive context compaction and can always be retrieved by ID, even in a fresh session.

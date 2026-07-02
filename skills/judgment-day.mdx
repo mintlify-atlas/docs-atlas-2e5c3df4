@@ -1,7 +1,7 @@
 ---
-title: "Judgment Day Skill: Adversarial Code Review"
+title: "Judgment Day: Parallel Adversarial Code Review Skill"
 sidebarTitle: "Judgment Day"
-description: "Judgment Day is an adversarial review skill that critiques code with the perspective of a hostile security auditor — finding bugs, architecture flaws, and hidden vulnerabilities."
+description: "Judgment Day launches two blind judges in parallel, synthesizes findings into a verdict, delegates fixes, and re-judges until both pass or user escalates."
 ---
 
 Judgment Day is an adversarial code review protocol that launches two independent judge sub-agents in parallel against the same target. Neither judge knows the other exists — no cross-contamination, no shared blind spots. The orchestrator then synthesizes their findings into a structured verdict, delegates fixes for confirmed issues, and re-judges until both agents return clean or the user decides to escalate. The result is a high-confidence review that is far harder to fool than a single pass.

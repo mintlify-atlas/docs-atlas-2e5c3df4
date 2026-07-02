@@ -1,7 +1,7 @@
 ---
 title: "Skill Registry: Catalog and Index Your Project Skills"
 sidebarTitle: "Skill Registry"
-description: "The skill-registry skill scans all available skills and project conventions, generates compact rules, and writes .atl/skill-registry.md for the orchestrator to read at session start."
+description: "The skill-registry skill scans skill directories, generates compact rules, and writes .atl/skill-registry.md for the orchestrator to read each session."
 ---
 
 The skill registry is the index that makes auto-loading work. It implements a **build-once / read-cheaply** pattern: running the registry is relatively expensive (it reads every `SKILL.md` in every known skill directory), but once built, the resulting `.atl/skill-registry.md` is a single lightweight file the orchestrator reads once per session and caches in memory. Every subsequent sub-agent delegation is cheap — the compact rules are already digested, matched, and injected directly into each prompt without touching the filesystem again.
@@ -180,5 +180,5 @@ mem_save(
 Using a stable `topic_key` means every subsequent registry update is an upsert — only one observation ever exists per project. The orchestrator queries engram first (`mem_search` → `mem_get_observation`) and falls back to `.atl/skill-registry.md` if engram is unavailable or the topic is not found.
 
 <Note>
-  The `.atl/` directory is added to `.gitignore` automatically if it exists. The skill registry is a generated build artifact — it should not be committed to version control.
+  When the skill-registry runs, it adds `.atl/` to the project's `.gitignore` if the file exists and `.atl` is not already listed. The skill registry is a generated build artifact — it should not be committed to version control.
 </Note>

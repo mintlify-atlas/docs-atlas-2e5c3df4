@@ -1,7 +1,7 @@
 ---
 title: "Go Testing Skill: Patterns for Go and Bubbletea TUI Tests"
 sidebarTitle: "Go Testing"
-description: "The go-testing skill injects Go testing patterns and Bubbletea TUI testing conventions into sub-agent prompts when Go test files or TUI components are detected."
+description: "The go-testing skill provides table-driven tests, Bubbletea model testing, teatest integration, and golden file patterns for Go and TUI projects."
 ---
 
 The `go-testing` skill auto-loads whenever a session involves Go test files or Bubbletea TUI code. It injects four core testing patterns — table-driven tests, direct model state testing, `teatest` integration tests, and golden file comparisons — into the sub-agent's prompt before any code is written. The skill also carries a decision tree to help the agent choose the right pattern for each scenario, preventing the most common Go testing mistakes like over-engineering simple unit tests or under-testing stateful TUI components.

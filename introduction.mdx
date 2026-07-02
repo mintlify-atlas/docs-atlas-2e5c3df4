@@ -1,7 +1,7 @@
 ---
 title: "OpenCode Config Agent: Professional AI Development Setup"
 sidebarTitle: "Introduction"
-description: "OpenCode Config Agent adds a Tony Stark mentor, SDD workflow, Engram memory, and auto-loading skills to OpenCode for structured, professional AI-assisted development."
+description: "OpenCode Config Agent adds a Tony Stark mentor, SDD pipeline, Engram memory, and context-aware skills to OpenCode for professional AI-assisted development."
 ---
 
 OpenCode Config Agent is a shareable, drop-in configuration for [OpenCode](https://opencode.ai) that transforms a standard AI coding session into a structured, professional development environment. Out of the box, OpenCode is a powerful AI terminal — this config layers four carefully designed systems on top of it: a senior architect mentor persona, a spec-driven workflow engine, a persistent memory layer, and a context-aware skills registry. The result is an AI collaborator that doesn't just write code on demand, but teaches, plans, remembers, and enforces real software engineering discipline across every session.
@@ -41,6 +41,7 @@ SDD is the structured planning layer for substantial changes. Instead of jumping
 
 | Agent | Role |
 |---|---|
+| `sdd-orchestrator` | Coordinate the pipeline — delegates phases to sub-agents, never executes inline |
 | `sdd-init` | Bootstrap SDD context and detect project stack |
 | `sdd-explore` | Investigate the codebase and research ideas |
 | `sdd-propose` | Create a structured change proposal |

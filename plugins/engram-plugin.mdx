@@ -1,7 +1,7 @@
 ---
 title: "Engram Plugin: Persistent Cross-Session Memory for OpenCode"
 sidebarTitle: "Engram Plugin"
-description: "The Engram plugin connects OpenCode's event system to a local SQLite-backed memory server — capturing prompts, tool calls, and session summaries that persist across sessions and compaction."
+description: "Plugin bridging OpenCode to engram's SQLite server: captures prompts, injects memory instructions, and persists session summaries that survive compaction."
 ---
 
 The Engram plugin is a thin adapter layer that bridges OpenCode's internal event system to the `engram` Go binary — a local HTTP server backed by a SQLite database. Every user prompt, tool call, and session summary is silently captured and persisted, making it available to future sessions and surviving context compaction. The plugin handles binary auto-start, project name extraction, session lifecycle management, and system prompt injection, so there is nothing for you to configure manually beyond having the `engram` binary installed.
@@ -30,7 +30,7 @@ The plugin reads two environment variables at startup:
 | Variable | Default | Purpose |
 |---|---|---|
 | `ENGRAM_PORT` | `7437` | HTTP port the engram binary listens on |
-| `ENGRAM_BIN` | `/opt/homebrew/bin/engram` (or `Bun.which("engram")`) | Path to the engram binary |
+| `ENGRAM_BIN` | Resolved in order: `ENGRAM_BIN` env var → `Bun.which("engram")` → `/opt/homebrew/Cellar/engram/1.10.10/bin/engram` | Path to the engram binary |
 
 ```bash
 # Override port (e.g. if 7437 is in use)

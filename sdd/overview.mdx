@@ -1,7 +1,7 @@
 ---
 title: "Spec-Driven Development: Structured AI Change Workflow"
 sidebarTitle: "Overview"
-description: "Spec-Driven Development (SDD) is a 9-phase workflow for making structured code changes using coordinated AI sub-agents in OpenCode — from exploration to archive."
+description: "SDD is a 9-phase AI-assisted workflow for structured code changes — explore, propose, design, spec, tasks, apply, verify, and archive — in OpenCode."
 ---
 
 Spec-Driven Development (SDD) is a structured workflow for making substantial code changes with AI assistance. Rather than asking an AI to "just write the feature," SDD enforces a deliberate pipeline: explore the codebase, propose the change, design the architecture, write detailed specifications, break down tasks, implement, verify, and archive. This prevents the most common failure mode of AI-assisted coding — writing code without understanding the system — by requiring every change to pass through documented, reviewable phases before a single line is written.
@@ -27,10 +27,9 @@ SDD is built directly into OpenCode as a set of coordinated sub-agents, each res
 Each phase builds on the artifacts produced by previous phases. Spec and Design can run in parallel once the Proposal exists; Tasks require both before proceeding.
 
 ```
-proposal ──► spec ──────► tasks ──► apply ──► verify ──► archive
-               ▲            ▲
-               │            │
-             design ────────┘
+proposal ──► spec ─────┐
+    │                  ▼
+    └──► design ──► tasks ──► apply ──► verify ──► archive
 ```
 
 <Note>
@@ -39,7 +38,7 @@ proposal ──► spec ──────► tasks ──► apply ──► ve
 
 ## Artifact Storage
 
-SDD artifacts (proposals, specs, designs, tasks, apply progress, verify reports) are stored in one of three backends. The orchestrator asks which mode you prefer at the start of each session.
+SDD artifacts (proposals, specs, designs, tasks, apply progress, verify reports) are stored in one of four backends. The orchestrator asks which mode you prefer at the start of each session.
 
 | Mode | Description | Best For |
 |------|-------------|----------|

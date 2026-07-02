@@ -1,5 +1,5 @@
 ---
-title: "SDD Execution Modes and Artifact Storage Options"
+title: "SDD Execution Modes and Artifact Storage Configuration"
 sidebarTitle: "Execution Modes"
 description: "Configure how SDD workflows run — Interactive vs Automatic execution, and choose between Engram, OpenSpec, or Hybrid artifact storage for your team."
 ---
@@ -97,7 +97,7 @@ The orchestrator reads a model assignment table at session start, caches it, and
 | sdd-apply | sonnet | Implementation |
 | sdd-verify | sonnet | Validation against spec |
 | sdd-archive | haiku | Copy and close |
-| default (non-SDD) | sonnet | General delegation |
+| default (non-SDD) | sonnet | Non-SDD general delegation |
 
 <Tip>
   If the assigned model is not available in your current OpenCode session, the orchestrator automatically substitutes `sonnet` and continues without interrupting the workflow.
